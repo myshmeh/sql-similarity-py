@@ -174,7 +174,7 @@ class TestBatchController:
         assert exit_code == ExitCode.BATCH_SUCCESS
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
-        assert lines[0] == "file1,file2,distance"
+        assert lines[0] == "file1,file2,score,distance"
 
     def test_execute_applies_max_distance_filter(self, controller, tmp_path, capsys):
         """execute() should filter results by max_distance."""

@@ -7,7 +7,9 @@ from sql_similarity.domain.parser import parse_sql, ParseError
 from sql_similarity.domain.comparator import (
     ComparisonResult,
     compute_distance,
+    compute_score,
     interpret_mapping,
+    tree_size,
 )
 
 
@@ -74,10 +76,17 @@ class ComparisonService:
         except ParseError as e:
             raise SQLParseError(path2.name, e)
 
+        # Compute tree sizes for score normalization
+        size1 = tree_size(tree1)
+        size2 = tree_size(tree2)
+
         # Compute distance and mapping
         distance, mapping = compute_distance(tree1, tree2)
 
         # Interpret mapping to edit operations
         operations = interpret_mapping(mapping)
 
-        return ComparisonResult(distance=distance, operations=operations)
+        # Compute normalized similarity score
+        score = compute_score(distance, size1, size2)
+
+        return ComparisonResult(distance=distance, operations=operations, score=score)

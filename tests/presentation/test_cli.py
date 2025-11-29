@@ -403,7 +403,7 @@ class TestCliBatchOutputFormats:
 
         assert result.returncode == 0
         lines = result.stdout.strip().split("\n")
-        assert lines[0] == "file1,file2,distance"
+        assert lines[0] == "file1,file2,score,distance"
         assert len(lines) == 2  # header + 1 comparison
 
     def test_json_and_csv_are_mutually_exclusive(self, tmp_path):

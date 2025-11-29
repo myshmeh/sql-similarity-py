@@ -59,14 +59,15 @@ def format_batch_table(
     col1_width = 20
     col2_width = 20
     col3_width = 8
-    lines.append(f"{'File 1':<{col1_width}}{'File 2':<{col2_width}}{'Distance':>{col3_width}}")
-    lines.append("─" * (col1_width + col2_width + col3_width))
+    col4_width = 10
+    lines.append(f"{'File 1':<{col1_width}}{'File 2':<{col2_width}}{'Score':>{col3_width}}{'Distance':>{col4_width}}")
+    lines.append("─" * (col1_width + col2_width + col3_width + col4_width))
 
-    # Table rows (already sorted by distance ascending)
+    # Table rows (already sorted by score descending)
     for comparison in result.comparisons:
         file1 = comparison.file1[:col1_width - 1] if len(comparison.file1) >= col1_width else comparison.file1
         file2 = comparison.file2[:col2_width - 1] if len(comparison.file2) >= col2_width else comparison.file2
-        lines.append(f"{file1:<{col1_width}}{file2:<{col2_width}}{comparison.distance:>{col3_width}}")
+        lines.append(f"{file1:<{col1_width}}{file2:<{col2_width}}{comparison.score:>{col3_width}.3f}{comparison.distance:>{col4_width}}")
 
     # Errors section
     if result.errors:
@@ -103,6 +104,7 @@ def format_batch_json(
             {
                 "file1": c.file1,
                 "file2": c.file2,
+                "score": c.score,
                 "distance": c.distance,
                 "operations": [
                     {
@@ -145,10 +147,10 @@ def format_batch_csv(result: BatchComparisonResult) -> str:
     writer = csv.writer(output, lineterminator="\n")
 
     # Write header
-    writer.writerow(["file1", "file2", "distance"])
+    writer.writerow(["file1", "file2", "score", "distance"])
 
     # Write comparison rows
     for c in result.comparisons:
-        writer.writerow([c.file1, c.file2, c.distance])
+        writer.writerow([c.file1, c.file2, c.score, c.distance])
 
     return output.getvalue().strip()

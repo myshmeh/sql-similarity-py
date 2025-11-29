@@ -33,10 +33,12 @@ class ComparisonResult:
     Attributes:
         distance: Tree edit distance (minimum edit operations).
         operations: Sequence of edit operations.
+        score: Normalized similarity score (0.0-1.0).
     """
 
     distance: int
     operations: list[EditOperation]
+    score: float
 
 
 class ANTLR4Config(Config):
@@ -110,6 +112,40 @@ class ANTLR4Config(Config):
             return node.getText()
         # For rule nodes, use the class name minus "Context"
         return type(node).__name__.replace("Context", "")
+
+
+def tree_size(node) -> int:
+    """Count total nodes in an ANTLR4 parse tree.
+
+    Args:
+        node: Root of ANTLR4 parse tree.
+
+    Returns:
+        Total number of nodes (rules + terminals).
+    """
+    config = ANTLR4Config()
+    children = config.children(node)
+    return 1 + sum(tree_size(child) for child in children)
+
+
+def compute_score(distance: int, size1: int, size2: int) -> float:
+    """Compute normalized similarity score.
+
+    Formula: 1 - (distance / max(size1, size2))
+
+    Args:
+        distance: Tree edit distance.
+        size1: Size of first tree.
+        size2: Size of second tree.
+
+    Returns:
+        Score between 0.0 (completely different) and 1.0 (identical).
+        Returns 1.0 if both trees are empty (max size = 0).
+    """
+    max_size = max(size1, size2)
+    if max_size == 0:
+        return 1.0
+    return 1.0 - (distance / max_size)
 
 
 def compute_distance(tree1, tree2) -> tuple[int, list]:

@@ -350,3 +350,100 @@ class TestCombinedFilters:
         assert len(filtered) == 2
         assert filtered[0].distance == 3
         assert filtered[1].distance == 5
+
+
+# ============================================================================
+# US1 Enhancement: Recursive Directory Scanning Tests (T051-T054)
+# ============================================================================
+
+
+class TestRecursiveDirectoryScanning:
+    """Tests for recursive directory scanning (T051-T054)."""
+
+    def test_scan_directory_finds_sql_files_in_subdirectories(self, tmp_path):
+        """scan_directory() should find SQL files in subdirectories (T051)."""
+        # Create nested structure
+        (tmp_path / "root.sql").write_text("SELECT 1")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.sql").write_text("SELECT 2")
+
+        files = scan_directory(tmp_path)
+
+        assert len(files) == 2
+        # Should find both root and nested files
+        assert "root.sql" in files
+        assert "subdir/nested.sql" in files
+
+    def test_scan_directory_returns_relative_paths(self, tmp_path):
+        """scan_directory() should return relative paths for nested files (T052)."""
+        # Create subdirectory with SQL file
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir()
+        (reports_dir / "daily.sql").write_text("SELECT * FROM daily")
+
+        files = scan_directory(tmp_path)
+
+        # Should return relative path with subdirectory prefix
+        assert "reports/daily.sql" in files
+        # Should NOT return just the filename
+        assert "daily.sql" not in files
+
+    def test_scan_directory_handles_deeply_nested_directories(self, tmp_path):
+        """scan_directory() should find files at arbitrary depth (T053)."""
+        # Create deeply nested structure: a/b/c/d/query.sql
+        deep_path = tmp_path / "a" / "b" / "c" / "d"
+        deep_path.mkdir(parents=True)
+        (deep_path / "query.sql").write_text("SELECT 1")
+        # Also add a file at root for comparison
+        (tmp_path / "root.sql").write_text("SELECT 2")
+
+        files = scan_directory(tmp_path)
+
+        assert len(files) == 2
+        assert "root.sql" in files
+        assert "a/b/c/d/query.sql" in files
+
+    def test_compare_all_pairs_works_with_files_from_different_subdirectories(self, tmp_path):
+        """compare_all_pairs() should compare files across subdirectories (T054)."""
+        # Create files in different locations
+        (tmp_path / "root.sql").write_text("SELECT id FROM users")
+
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir()
+        (reports_dir / "daily.sql").write_text("SELECT id FROM users")  # Similar to root
+
+        etl_dir = tmp_path / "etl"
+        etl_dir.mkdir()
+        (etl_dir / "load.sql").write_text("INSERT INTO orders SELECT * FROM staging")
+
+        result = compare_all_pairs(tmp_path)
+
+        # 3 files = 3 combinations
+        assert len(result.comparisons) == 3
+
+        # Check that relative paths are used in comparisons
+        all_files = set()
+        for comp in result.comparisons:
+            all_files.add(comp.file1)
+            all_files.add(comp.file2)
+
+        assert "root.sql" in all_files
+        assert "reports/daily.sql" in all_files
+        assert "etl/load.sql" in all_files
+
+    def test_scan_directory_maintains_alphabetical_sort_with_subdirs(self, tmp_path):
+        """scan_directory() should sort relative paths alphabetically."""
+        # Create files in various locations
+        (tmp_path / "z_root.sql").write_text("SELECT 1")
+        (tmp_path / "a_root.sql").write_text("SELECT 2")
+
+        sub = tmp_path / "middle"
+        sub.mkdir()
+        (sub / "file.sql").write_text("SELECT 3")
+
+        files = scan_directory(tmp_path)
+
+        assert files == sorted(files)
+        # 'a_root.sql' should come before 'middle/file.sql' before 'z_root.sql'
+        assert files == ["a_root.sql", "middle/file.sql", "z_root.sql"]

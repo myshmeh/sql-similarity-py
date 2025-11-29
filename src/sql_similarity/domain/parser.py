@@ -1,18 +1,10 @@
 """SQL parsing using Snowflake ANTLR4 grammar."""
 
-import sys
-from pathlib import Path
-
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
-# Add grammars directory to path for imports
-_grammars_path = Path(__file__).parent.parent.parent.parent / "grammars" / "snowflake"
-if str(_grammars_path) not in sys.path:
-    sys.path.insert(0, str(_grammars_path))
-
-from SnowflakeLexer import SnowflakeLexer
-from SnowflakeParser import SnowflakeParser
+from sql_similarity.grammars.snowflake.SnowflakeLexer import SnowflakeLexer
+from sql_similarity.grammars.snowflake.SnowflakeParser import SnowflakeParser
 
 
 class ParseError(Exception):

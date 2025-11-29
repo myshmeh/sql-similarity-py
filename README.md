@@ -2,14 +2,14 @@
 
 ![Experimental](https://img.shields.io/badge/status-experimental-red)
 
-A CLI tool to compare SQL files using tree edit distance. It parses SQL statements into abstract syntax trees and computes structural similarity using the APTED algorithm.
+A CLI tool to compare SQL files using tree edit distance. It parses SQL statements into token trees and computes structural similarity using the APTED algorithm.
 
 ## Overview
 
 sql-similarity analyzes SQL queries by:
 
-1. Parsing SQL files using ANTLR4
-2. Computing tree edit distance between parse trees using APTED
+1. Parsing SQL files using [sqlparse](https://github.com/andialbrecht/sqlparse)
+2. Computing tree edit distance between token trees using APTED
 3. Returning a normalized similarity score (0.0 to 1.0) and detailed edit operations
 
 The tool supports two modes:
@@ -18,7 +18,7 @@ The tool supports two modes:
 
 ## Supported SQL Dialects
 
-- **Snowflake SQL**
+sqlparse is a non-validating SQL parser, therefore it should work most of the dialects.
 
 ## Usage
 

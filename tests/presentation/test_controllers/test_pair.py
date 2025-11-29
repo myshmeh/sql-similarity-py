@@ -90,16 +90,19 @@ class TestPairController:
         captured = capsys.readouterr()
         assert "Error:" in captured.err
 
-    def test_execute_returns_parse_error_for_invalid_sql(
+    def test_execute_returns_parse_error_for_empty_sql(
         self, controller, fixtures_dir, tmp_path, capsys
     ):
-        """execute() should return PARSE_ERROR for invalid SQL."""
-        invalid_sql = tmp_path / "invalid.sql"
-        invalid_sql.write_text("THIS IS NOT VALID SQL @#$%^&*()")
+        """execute() should return PARSE_ERROR for empty SQL file.
+
+        Note: sqlparse is a non-validating parser. Only empty files trigger errors.
+        """
+        empty_sql = tmp_path / "empty.sql"
+        empty_sql.write_text("")  # Empty file triggers ParseError
         valid_sql = str(fixtures_dir / "simple_select.sql")
 
         args = argparse.Namespace(
-            path1=str(invalid_sql),
+            path1=str(empty_sql),
             path2=valid_sql,
             json=False,
         )

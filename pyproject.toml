@@ -6,4 +6,5 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "antlr4-tools>=0.2.2",
+    "apted>=1.0.3",
 ]

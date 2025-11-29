@@ -1,7 +1,6 @@
 """Tests for output formatters."""
 
 import json
-import pytest
 
 from sql_similarity.domain.comparator import ComparisonResult, EditOperation
 from sql_similarity.presentation.formatter import format_human, format_json

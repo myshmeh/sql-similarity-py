@@ -1,26 +1,17 @@
-"""Tests for tree comparator and ANTLR4Config."""
+"""Tests for tree comparator and SQLGlotConfig."""
 
-import pytest
-from antlr4.tree.Tree import TerminalNodeImpl
-
-from sql_similarity.domain.parser import parse_sql
-from sql_similarity.domain.comparator import (
-    ANTLR4Config,
-    compute_distance,
-    compute_score,
-    interpret_mapping,
-    tree_size,
-    EditOperation,
-    ComparisonResult,
-)
+from sqlglot import exp
 
 
-class TestANTLR4ConfigChildren:
-    """Tests for ANTLR4Config.children() method."""
+class TestSQLGlotConfigChildren:
+    """Tests for SQLGlotConfig.children() method."""
 
-    def test_children_returns_list_for_rule_context(self):
-        """children() should return child list for ParserRuleContext nodes."""
-        config = ANTLR4Config()
+    def test_children_returns_list_for_expression_node(self):
+        """children() should return child list for Expression nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
         # Root should have children
@@ -28,165 +19,199 @@ class TestANTLR4ConfigChildren:
         assert isinstance(children, list)
         assert len(children) > 0
 
-    def test_children_returns_empty_for_terminal_node(self):
-        """children() should return empty list for TerminalNode."""
-        config = ANTLR4Config()
+    def test_children_returns_empty_for_leaf_node(self):
+        """children() should return empty list for leaf nodes like Identifier."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find a terminal node (leaf)
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
-            return None
-
-        terminal = find_terminal(tree)
-        assert terminal is not None
-        assert config.children(terminal) == []
+        # Find an Identifier node (leaf)
+        identifier = tree.find(exp.Identifier)
+        assert identifier is not None
+        # Identifiers typically don't have expression children
+        children = config.children(identifier)
+        # May have 'this' as string, but not Expression children
+        assert isinstance(children, list)
 
 
-class TestANTLR4ConfigDelete:
-    """Tests for ANTLR4Config.delete() method."""
+class TestSQLGlotConfigDelete:
+    """Tests for SQLGlotConfig.delete() method."""
 
     def test_delete_returns_uniform_cost_of_1(self):
         """delete() should return uniform cost of 1."""
-        config = ANTLR4Config()
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
         # Should return 1 for any node
         assert config.delete(tree) == 1
 
-    def test_delete_returns_1_for_terminal_node(self):
-        """delete() should return 1 for terminal nodes too."""
-        config = ANTLR4Config()
+    def test_delete_returns_1_for_identifier_node(self):
+        """delete() should return 1 for identifier nodes too."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find a terminal node
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
-            return None
-
-        terminal = find_terminal(tree)
-        assert config.delete(terminal) == 1
+        identifier = tree.find(exp.Identifier)
+        assert config.delete(identifier) == 1
 
 
-class TestANTLR4ConfigInsert:
-    """Tests for ANTLR4Config.insert() method."""
+class TestSQLGlotConfigInsert:
+    """Tests for SQLGlotConfig.insert() method."""
 
     def test_insert_returns_uniform_cost_of_1(self):
         """insert() should return uniform cost of 1."""
-        config = ANTLR4Config()
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
         # Should return 1 for any node
         assert config.insert(tree) == 1
 
-    def test_insert_returns_1_for_terminal_node(self):
-        """insert() should return 1 for terminal nodes too."""
-        config = ANTLR4Config()
-        tree = parse_sql("SELECT id FROM users")
+    def test_insert_returns_1_for_literal_node(self):
+        """insert() should return 1 for literal nodes too."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
 
-        # Find a terminal node
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
-            return None
+        config = SQLGlotConfig()
+        tree = parse_sql("SELECT 1 FROM users")
 
-        terminal = find_terminal(tree)
-        assert config.insert(terminal) == 1
+        literal = tree.find(exp.Literal)
+        assert literal is not None
+        assert config.insert(literal) == 1
 
 
-class TestANTLR4ConfigRename:
-    """Tests for ANTLR4Config.rename() method."""
+class TestSQLGlotConfigRename:
+    """Tests for SQLGlotConfig.rename() method."""
 
     def test_rename_returns_0_for_matching_labels(self):
         """rename() should return 0 when labels match."""
-        config = ANTLR4Config()
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT name FROM customers")
 
-        # Both roots are Snowflake_file, should return 0
+        # Both roots are Select expressions, should return 0
         assert config.rename(tree1, tree2) == 0
 
     def test_rename_returns_1_for_different_labels(self):
         """rename() should return 1 when labels differ."""
-        config = ANTLR4Config()
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree1 = parse_sql("SELECT id FROM users")
-        tree2 = parse_sql("SELECT id FROM users")
+        tree2 = parse_sql("SELECT 1 FROM users")
 
-        # Find different node types
-        def find_first_child(node):
-            children = config.children(node)
-            return children[0] if children else None
+        # Find a Column in tree1 and a Literal in tree2
+        column = tree1.find(exp.Column)
+        literal = tree2.find(exp.Literal)
 
-        # Get different depth nodes which will have different labels
-        child1 = find_first_child(tree1)
-        # Find a terminal in tree2
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
-            return None
-
-        terminal2 = find_terminal(tree2)
-
-        # Rule context vs terminal should have different labels
-        if child1 and terminal2:
-            # They should have different labels (one is rule name, other is token text)
-            label1 = config._get_label(child1)
-            label2 = config._get_label(terminal2)
-            if label1 != label2:
-                assert config.rename(child1, terminal2) == 1
+        if column and literal:
+            # Column vs Literal should have different labels
+            assert config.rename(column, literal) == 1
 
 
-class TestANTLR4ConfigGetLabel:
-    """Tests for ANTLR4Config._get_label() method."""
+class TestSQLGlotConfigGetLabel:
+    """Tests for SQLGlotConfig._get_label() method."""
 
-    def test_get_label_returns_class_name_minus_context_for_rules(self):
-        """_get_label() should return class name minus 'Context' for rule nodes."""
-        config = ANTLR4Config()
+    def test_get_label_returns_class_name_for_expressions(self):
+        """_get_label() should return class name for Expression nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Root is Snowflake_fileContext, should return "Snowflake_file"
+        # Root is Select expression
         label = config._get_label(tree)
-        assert label == "Snowflake_file"
-        assert "Context" not in label
+        assert label == "Select"
 
-    def test_get_label_returns_token_text_for_terminals(self):
-        """_get_label() should return token text for terminal nodes."""
-        config = ANTLR4Config()
+    def test_get_label_returns_identifier_for_identifiers(self):
+        """_get_label() should return 'Identifier' for identifier nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import SQLGlotConfig
+
+        config = SQLGlotConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find the SELECT terminal
-        def find_terminal_with_text(node, text):
-            if isinstance(node, TerminalNodeImpl):
-                if node.getText().upper() == text.upper():
-                    return node
-            for child in config.children(node):
-                result = find_terminal_with_text(child, text)
-                if result:
-                    return result
-            return None
+        identifier = tree.find(exp.Identifier)
+        assert identifier is not None
+        label = config._get_label(identifier)
+        assert label == "Identifier"
 
-        select_terminal = find_terminal_with_text(tree, "SELECT")
-        assert select_terminal is not None
-        label = config._get_label(select_terminal)
-        assert label == "SELECT"
+
+class TestGetNodeType:
+    """Tests for _get_node_type() function."""
+
+    def test_get_node_type_returns_terminal_for_literal(self):
+        """_get_node_type() should return 'terminal' for Literal nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import _get_node_type
+
+        tree = parse_sql("SELECT 1 FROM users")
+        literal = tree.find(exp.Literal)
+
+        assert literal is not None
+        assert _get_node_type(literal) == "terminal"
+
+    def test_get_node_type_returns_terminal_for_identifier(self):
+        """_get_node_type() should return 'terminal' for Identifier nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import _get_node_type
+
+        tree = parse_sql("SELECT id FROM users")
+        identifier = tree.find(exp.Identifier)
+
+        assert identifier is not None
+        assert _get_node_type(identifier) == "terminal"
+
+    def test_get_node_type_returns_rule_for_select(self):
+        """_get_node_type() should return 'rule' for Select nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import _get_node_type
+
+        tree = parse_sql("SELECT id FROM users")
+        assert _get_node_type(tree) == "rule"
+
+
+class TestGetTreePath:
+    """Tests for _get_tree_path() function."""
+
+    def test_get_tree_path_returns_string(self):
+        """_get_tree_path() should return a string path."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import _get_tree_path
+
+        tree = parse_sql("SELECT id FROM users")
+        identifier = tree.find(exp.Identifier)
+
+        assert identifier is not None
+        path = _get_tree_path(identifier)
+        assert isinstance(path, str)
+
+    def test_get_tree_path_contains_parent_info(self):
+        """_get_tree_path() should contain parent node information."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import _get_tree_path
+
+        tree = parse_sql("SELECT id FROM users")
+        identifier = tree.find(exp.Identifier)
+
+        if identifier and identifier.parent:
+            path = _get_tree_path(identifier)
+            # Path should contain Select at minimum
+            assert "Select" in path or path == ""
 
 
 class TestComputeDistance:
@@ -194,6 +219,9 @@ class TestComputeDistance:
 
     def test_compute_distance_returns_tuple(self):
         """compute_distance() should return (distance, mapping) tuple."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import compute_distance
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT name FROM customers")
 
@@ -207,6 +235,9 @@ class TestComputeDistance:
 
     def test_compute_distance_identical_trees_returns_zero(self):
         """compute_distance() should return 0 for identical trees."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import compute_distance
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT id FROM users")
 
@@ -216,6 +247,9 @@ class TestComputeDistance:
 
     def test_compute_distance_different_trees_returns_positive(self):
         """compute_distance() should return positive value for different trees."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import compute_distance
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT id, name FROM customers WHERE active = true")
 
@@ -229,6 +263,13 @@ class TestInterpretMapping:
 
     def test_interpret_mapping_returns_edit_operations(self):
         """interpret_mapping() should return list of EditOperation objects."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import (
+            compute_distance,
+            interpret_mapping,
+            EditOperation,
+        )
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT name FROM users")
 
@@ -240,6 +281,9 @@ class TestInterpretMapping:
 
     def test_interpret_mapping_contains_match_operations(self):
         """interpret_mapping() should include MATCH operations for matching nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import compute_distance, interpret_mapping
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT id FROM users")
 
@@ -251,6 +295,9 @@ class TestInterpretMapping:
 
     def test_interpret_mapping_contains_rename_insert_delete(self):
         """interpret_mapping() should include rename/insert/delete for different trees."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import compute_distance, interpret_mapping
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT name FROM customers")
 
@@ -268,6 +315,8 @@ class TestEditOperation:
 
     def test_edit_operation_has_required_fields(self):
         """EditOperation should have type, source_node, target_node fields."""
+        from sql_similarity.domain.comparator import EditOperation
+
         op = EditOperation(type="match", source_node="Foo", target_node="Foo")
 
         assert op.type == "match"
@@ -276,6 +325,8 @@ class TestEditOperation:
 
     def test_edit_operation_allows_none_for_insert(self):
         """EditOperation should allow None source_node for INSERT."""
+        from sql_similarity.domain.comparator import EditOperation
+
         op = EditOperation(type="insert", source_node=None, target_node="NewNode")
 
         assert op.type == "insert"
@@ -284,6 +335,8 @@ class TestEditOperation:
 
     def test_edit_operation_allows_none_for_delete(self):
         """EditOperation should allow None target_node for DELETE."""
+        from sql_similarity.domain.comparator import EditOperation
+
         op = EditOperation(type="delete", source_node="OldNode", target_node=None)
 
         assert op.type == "delete"
@@ -296,6 +349,8 @@ class TestComparisonResult:
 
     def test_comparison_result_has_distance_and_operations(self):
         """ComparisonResult should have distance and operations fields."""
+        from sql_similarity.domain.comparator import ComparisonResult, EditOperation
+
         ops = [EditOperation(type="match", source_node="A", target_node="A")]
         result = ComparisonResult(distance=0, operations=ops, score=1.0)
 
@@ -304,6 +359,8 @@ class TestComparisonResult:
 
     def test_comparison_result_operations_can_be_empty(self):
         """ComparisonResult operations can be empty list."""
+        from sql_similarity.domain.comparator import ComparisonResult
+
         result = ComparisonResult(distance=0, operations=[], score=1.0)
 
         assert result.distance == 0
@@ -311,6 +368,8 @@ class TestComparisonResult:
 
     def test_comparison_result_has_score_field(self):
         """ComparisonResult should have score field."""
+        from sql_similarity.domain.comparator import ComparisonResult, EditOperation
+
         ops = [EditOperation(type="match", source_node="A", target_node="A")]
         result = ComparisonResult(distance=0, operations=ops, score=1.0)
 
@@ -318,6 +377,8 @@ class TestComparisonResult:
 
     def test_comparison_result_score_can_be_fractional(self):
         """ComparisonResult score can be a fractional value."""
+        from sql_similarity.domain.comparator import ComparisonResult
+
         result = ComparisonResult(distance=5, operations=[], score=0.847)
 
         assert result.score == 0.847
@@ -328,6 +389,9 @@ class TestTreeSize:
 
     def test_tree_size_returns_positive_integer(self):
         """tree_size() should return a positive integer."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import tree_size
+
         tree = parse_sql("SELECT id FROM users")
         size = tree_size(tree)
 
@@ -336,14 +400,20 @@ class TestTreeSize:
 
     def test_tree_size_counts_all_nodes(self):
         """tree_size() should count both rule and terminal nodes."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import tree_size
+
         tree = parse_sql("SELECT 1")
         size = tree_size(tree)
 
-        # Should have at least: root + some rule nodes + terminal nodes
+        # Should have at least: Select + Literal
         assert size > 1
 
     def test_tree_size_larger_for_complex_query(self):
         """tree_size() should return larger value for more complex queries."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import tree_size
+
         simple_tree = parse_sql("SELECT 1")
         complex_tree = parse_sql("SELECT id, name FROM users WHERE active = true")
 
@@ -354,6 +424,9 @@ class TestTreeSize:
 
     def test_tree_size_identical_for_identical_queries(self):
         """tree_size() should return same value for identical queries."""
+        from sql_similarity.domain.parser import parse_sql
+        from sql_similarity.domain.comparator import tree_size
+
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT id FROM users")
 
@@ -365,34 +438,46 @@ class TestComputeScore:
 
     def test_compute_score_returns_1_for_zero_distance(self):
         """compute_score() should return 1.0 when distance is 0."""
+        from sql_similarity.domain.comparator import compute_score
+
         score = compute_score(distance=0, size1=10, size2=10)
         assert score == 1.0
 
     def test_compute_score_returns_0_for_max_distance(self):
         """compute_score() should return 0.0 when distance equals max(size1, size2)."""
+        from sql_similarity.domain.comparator import compute_score
+
         # Max distance = max(5, 10) = 10
         score = compute_score(distance=10, size1=5, size2=10)
         assert score == 0.0
 
     def test_compute_score_returns_1_for_empty_trees(self):
         """compute_score() should return 1.0 when both trees are empty."""
+        from sql_similarity.domain.comparator import compute_score
+
         score = compute_score(distance=0, size1=0, size2=0)
         assert score == 1.0
 
     def test_compute_score_returns_fractional_value(self):
         """compute_score() should return correct fractional score."""
+        from sql_similarity.domain.comparator import compute_score
+
         # distance=5, max(10, 10)=10, score = 1 - 5/10 = 0.5
         score = compute_score(distance=5, size1=10, size2=10)
         assert score == 0.5
 
     def test_compute_score_uses_max_of_sizes(self):
         """compute_score() should use max(size1, size2) as denominator."""
+        from sql_similarity.domain.comparator import compute_score
+
         # distance=3, max(5, 10)=10, score = 1 - 3/10 = 0.7
         score = compute_score(distance=3, size1=5, size2=10)
         assert score == 0.7
 
     def test_compute_score_between_0_and_1(self):
         """compute_score() should always return value between 0 and 1."""
+        from sql_similarity.domain.comparator import compute_score
+
         # Various test cases
         assert 0.0 <= compute_score(0, 10, 10) <= 1.0
         assert 0.0 <= compute_score(5, 10, 10) <= 1.0

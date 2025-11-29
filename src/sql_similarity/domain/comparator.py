@@ -1,10 +1,10 @@
-"""Tree edit distance computation using APTED with ANTLR4 integration."""
+"""Tree edit distance computation using APTED with sqlglot integration."""
 
 from dataclasses import dataclass
 from typing import Optional
 
 from apted import APTED, Config
-from antlr4.tree.Tree import TerminalNodeImpl
+from sqlglot import exp
 
 
 @dataclass
@@ -41,28 +41,33 @@ class ComparisonResult:
     score: float
 
 
-class ANTLR4Config(Config):
-    """APTED config for traversing ANTLR4 parse trees directly.
+class SQLGlotConfig(Config):
+    """APTED config for traversing sqlglot expression trees.
 
-    This configuration teaches APTED how to work with ANTLR4 parse tree nodes
+    This configuration teaches APTED how to work with sqlglot Expression nodes
     without requiring an intermediate transformation layer.
     """
 
-    def children(self, node):
-        """Return child nodes of an ANTLR4 node.
+    def children(self, node) -> list:
+        """Return child nodes of a sqlglot Expression.
 
         Args:
-            node: An ANTLR4 ParserRuleContext or TerminalNode.
+            node: A sqlglot Expression node.
 
         Returns:
-            List of child nodes. Empty list for terminal nodes.
+            List of child Expression nodes. Empty list for non-Expression nodes.
         """
-        if isinstance(node, TerminalNodeImpl):
+        if not isinstance(node, exp.Expression):
             return []
-        # ParserRuleContext nodes use getChildren()
-        return list(node.getChildren())
+        children = []
+        for value in node.args.values():
+            if isinstance(value, exp.Expression):
+                children.append(value)
+            elif isinstance(value, list):
+                children.extend(v for v in value if isinstance(v, exp.Expression))
+        return children
 
-    def delete(self, node):
+    def delete(self, node) -> int:
         """Cost of deleting a node.
 
         Args:
@@ -73,7 +78,7 @@ class ANTLR4Config(Config):
         """
         return 1
 
-    def insert(self, node):
+    def insert(self, node) -> int:
         """Cost of inserting a node.
 
         Args:
@@ -84,7 +89,7 @@ class ANTLR4Config(Config):
         """
         return 1
 
-    def rename(self, node1, node2):
+    def rename(self, node1, node2) -> int:
         """Cost of renaming node1 to node2.
 
         Args:
@@ -98,32 +103,28 @@ class ANTLR4Config(Config):
         label2 = self._get_label(node2)
         return 0 if label1 == label2 else 1
 
-    def _get_label(self, node):
+    def _get_label(self, node) -> str:
         """Extract a label for comparison.
 
         Args:
-            node: An ANTLR4 node.
+            node: A sqlglot Expression node.
 
         Returns:
-            For rule nodes: class name minus "Context" suffix.
-            For terminal nodes: token text.
+            The class name of the Expression (e.g., 'Select', 'Column', 'Identifier').
         """
-        if isinstance(node, TerminalNodeImpl):
-            return node.getText()
-        # For rule nodes, use the class name minus "Context"
-        return type(node).__name__.replace("Context", "")
+        return type(node).__name__
 
 
 def tree_size(node) -> int:
-    """Count total nodes in an ANTLR4 parse tree.
+    """Count total nodes in a sqlglot expression tree.
 
     Args:
-        node: Root of ANTLR4 parse tree.
+        node: Root of sqlglot expression tree.
 
     Returns:
-        Total number of nodes (rules + terminals).
+        Total number of Expression nodes.
     """
-    config = ANTLR4Config()
+    config = SQLGlotConfig()
     children = config.children(node)
     return 1 + sum(tree_size(child) for child in children)
 
@@ -149,18 +150,18 @@ def compute_score(distance: int, size1: int, size2: int) -> float:
 
 
 def compute_distance(tree1, tree2) -> tuple[int, list]:
-    """Compute tree edit distance between two ANTLR4 parse trees.
+    """Compute tree edit distance between two sqlglot expression trees.
 
     Args:
-        tree1: First ANTLR4 parse tree.
-        tree2: Second ANTLR4 parse tree.
+        tree1: First sqlglot expression tree.
+        tree2: Second sqlglot expression tree.
 
     Returns:
         Tuple of (distance, mapping) where:
         - distance: Integer tree edit distance.
         - mapping: List of (node1, node2) tuples from APTED.
     """
-    config = ANTLR4Config()
+    config = SQLGlotConfig()
     apted = APTED(tree1, tree2, config)
     distance = apted.compute_edit_distance()
     mapping = apted.compute_edit_mapping()
@@ -168,15 +169,15 @@ def compute_distance(tree1, tree2) -> tuple[int, list]:
 
 
 def _get_node_type(node) -> str:
-    """Determine if a node is a rule or terminal.
+    """Determine if a node is a rule or terminal type.
 
     Args:
-        node: An ANTLR4 node.
+        node: A sqlglot Expression node.
 
     Returns:
-        'terminal' for TerminalNode, 'rule' for ParserRuleContext.
+        'terminal' for Literal/Identifier nodes, 'rule' for other Expressions.
     """
-    if isinstance(node, TerminalNodeImpl):
+    if isinstance(node, (exp.Literal, exp.Identifier)):
         return "terminal"
     return "rule"
 
@@ -185,20 +186,19 @@ def _get_tree_path(node) -> str:
     """Extract the path from root to this node.
 
     Args:
-        node: An ANTLR4 node.
+        node: A sqlglot Expression node.
 
     Returns:
-        Path string like "Snowflake_file > Select_statement > From_clause".
+        Path string like "Select > From > Table".
     """
-    config = ANTLR4Config()
+    config = SQLGlotConfig()
     path_parts = []
     current = node
 
     while current is not None:
         label = config._get_label(current)
         path_parts.append(label)
-        # Get parent - ParserRuleContext has parentCtx, TerminalNode has parentCtx too
-        current = getattr(current, "parentCtx", None)
+        current = current.parent  # sqlglot uses 'parent' property
 
     # Reverse to get root-to-node order, exclude the current node itself
     path_parts.reverse()
@@ -216,7 +216,7 @@ def interpret_mapping(mapping: list) -> list[EditOperation]:
     Returns:
         List of EditOperation objects representing the transformation.
     """
-    config = ANTLR4Config()
+    config = SQLGlotConfig()
     operations = []
 
     for node1, node2 in mapping:
@@ -225,25 +225,29 @@ def interpret_mapping(mapping: list) -> list[EditOperation]:
             label = config._get_label(node2)
             node_type = _get_node_type(node2)
             tree_path = _get_tree_path(node2)
-            operations.append(EditOperation(
-                type="insert",
-                source_node=None,
-                target_node=label,
-                node_type=node_type,
-                tree_path=tree_path
-            ))
+            operations.append(
+                EditOperation(
+                    type="insert",
+                    source_node=None,
+                    target_node=label,
+                    node_type=node_type,
+                    tree_path=tree_path,
+                )
+            )
         elif node2 is None:
             # DELETE: node1 was removed
             label = config._get_label(node1)
             node_type = _get_node_type(node1)
             tree_path = _get_tree_path(node1)
-            operations.append(EditOperation(
-                type="delete",
-                source_node=label,
-                target_node=None,
-                node_type=node_type,
-                tree_path=tree_path
-            ))
+            operations.append(
+                EditOperation(
+                    type="delete",
+                    source_node=label,
+                    target_node=None,
+                    node_type=node_type,
+                    tree_path=tree_path,
+                )
+            )
         else:
             label1 = config._get_label(node1)
             label2 = config._get_label(node2)
@@ -252,21 +256,25 @@ def interpret_mapping(mapping: list) -> list[EditOperation]:
             tree_path = _get_tree_path(node1)
             if label1 == label2:
                 # MATCH: nodes are equivalent
-                operations.append(EditOperation(
-                    type="match",
-                    source_node=label1,
-                    target_node=label2,
-                    node_type=node_type,
-                    tree_path=tree_path
-                ))
+                operations.append(
+                    EditOperation(
+                        type="match",
+                        source_node=label1,
+                        target_node=label2,
+                        node_type=node_type,
+                        tree_path=tree_path,
+                    )
+                )
             else:
                 # RENAME: node label changed
-                operations.append(EditOperation(
-                    type="rename",
-                    source_node=label1,
-                    target_node=label2,
-                    node_type=node_type,
-                    tree_path=tree_path
-                ))
+                operations.append(
+                    EditOperation(
+                        type="rename",
+                        source_node=label1,
+                        target_node=label2,
+                        node_type=node_type,
+                        tree_path=tree_path,
+                    )
+                )
 
     return operations

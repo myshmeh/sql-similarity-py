@@ -252,7 +252,7 @@ class TestCliBatchMode:
         assert result.returncode == 0
         # Find lines with distances and verify order
         lines = result.stdout.split("\n")
-        distance_lines = [l for l in lines if l.strip() and ".sql" in l]
+        distance_lines = [line for line in lines if line.strip() and ".sql" in line]
         # First comparison should be a.sql vs b.sql with distance 0
         if distance_lines:
             first_line = distance_lines[0]

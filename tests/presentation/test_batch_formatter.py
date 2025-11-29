@@ -1,7 +1,6 @@
 """Tests for batch output formatters."""
 
 import json
-import pytest
 
 from sql_similarity.service.batch import BatchComparisonResult, PairComparison, FileError
 from sql_similarity.domain.comparator import EditOperation

@@ -8,7 +8,7 @@ A CLI tool to compare SQL files using tree edit distance. It parses SQL statemen
 
 sql-similarity analyzes SQL queries by:
 
-1. Parsing SQL files using ANTLR4
+1. Parsing SQL files using sqlglot
 2. Computing tree edit distance between parse trees using APTED
 3. Returning a normalized similarity score (0.0 to 1.0) and detailed edit operations
 

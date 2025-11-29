@@ -12,6 +12,41 @@ from sql_similarity.presentation.batch_formatter import (
 )
 
 
+class TestFormatBatchTable:
+    """Tests for format_batch_table() function."""
+
+    def test_format_batch_table_includes_score_column(self):
+        """format_batch_table() should include Score column in header."""
+        result = BatchComparisonResult(
+            directory="/path/to/dir",
+            files=["a.sql", "b.sql"],
+            comparisons=[
+                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.847)
+            ],
+            errors=[],
+        )
+
+        output = format_batch_table(result)
+
+        assert "Score" in output
+        assert "0.847" in output
+
+    def test_format_batch_table_score_column_formatting(self):
+        """format_batch_table() should format score with 3 decimal places."""
+        result = BatchComparisonResult(
+            directory="/path/to/dir",
+            files=["a.sql", "b.sql"],
+            comparisons=[
+                PairComparison(file1="a.sql", file2="b.sql", distance=0, operations=[], score=1.0)
+            ],
+            errors=[],
+        )
+
+        output = format_batch_table(result)
+
+        assert "1.000" in output
+
+
 class TestFormatBatchJson:
     """Tests for format_batch_json() function (T037-T038)."""
 
@@ -38,6 +73,7 @@ class TestFormatBatchJson:
             file2="b.sql",
             distance=1,
             operations=operations,
+            score=0.9,
         )
         result = BatchComparisonResult(
             directory="/path/to/dir",
@@ -60,6 +96,28 @@ class TestFormatBatchJson:
         assert "target" in op
         assert "node_type" in op
         assert "tree_path" in op
+
+    def test_format_batch_json_includes_score(self):
+        """format_batch_json() should include score field in comparisons."""
+        comparison = PairComparison(
+            file1="a.sql",
+            file2="b.sql",
+            distance=2,
+            operations=[],
+            score=0.847,
+        )
+        result = BatchComparisonResult(
+            directory="/path/to/dir",
+            files=["a.sql", "b.sql"],
+            comparisons=[comparison],
+            errors=[],
+        )
+
+        json_output = format_batch_json(result)
+        parsed = json.loads(json_output)
+
+        assert "score" in parsed["comparisons"][0]
+        assert parsed["comparisons"][0]["score"] == 0.847
 
     def test_format_batch_json_includes_filter_metadata(self):
         """format_batch_json() should include filter metadata (T038)."""
@@ -86,7 +144,7 @@ class TestFormatBatchJson:
             directory="/path/to/dir",
             files=["a.sql", "b.sql", "c.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[])
+                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5)
             ],
             errors=[FileError(file="invalid.sql", error="Parse error")],
         )
@@ -105,12 +163,12 @@ class TestFormatBatchCsv:
     """Tests for format_batch_csv() function (T039-T040)."""
 
     def test_format_batch_csv_outputs_correct_headers(self):
-        """format_batch_csv() should output correct headers (T039)."""
+        """format_batch_csv() should output correct headers including score."""
         result = BatchComparisonResult(
             directory="/path/to/dir",
             files=["a.sql", "b.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[])
+                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5)
             ],
             errors=[],
         )
@@ -118,8 +176,8 @@ class TestFormatBatchCsv:
         csv_output = format_batch_csv(result)
         lines = csv_output.strip().split("\n")
 
-        assert lines[0] == "file1,file2,distance"
-        assert lines[1] == "a.sql,b.sql,5"
+        assert lines[0] == "file1,file2,score,distance"
+        assert lines[1] == "a.sql,b.sql,0.5,5"
 
     def test_format_batch_csv_handles_filenames_with_commas(self):
         """format_batch_csv() should handle filenames with commas (T040)."""
@@ -132,6 +190,7 @@ class TestFormatBatchCsv:
                     file2="normal.sql",
                     distance=3,
                     operations=[],
+                    score=0.7,
                 )
             ],
             errors=[],
@@ -159,4 +218,4 @@ class TestFormatBatchCsv:
 
         # Should only have header
         assert len(lines) == 1
-        assert lines[0] == "file1,file2,distance"
+        assert lines[0] == "file1,file2,score,distance"

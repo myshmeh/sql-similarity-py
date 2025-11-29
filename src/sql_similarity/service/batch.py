@@ -5,7 +5,13 @@ from itertools import combinations
 from pathlib import Path
 from typing import Union
 
-from sql_similarity.domain.comparator import EditOperation, compute_distance, interpret_mapping
+from sql_similarity.domain.comparator import (
+    EditOperation,
+    compute_distance,
+    compute_score,
+    interpret_mapping,
+    tree_size,
+)
 from sql_similarity.domain.parser import parse_sql, ParseError
 
 
@@ -31,12 +37,14 @@ class PairComparison:
         file2: Path to second file (relative to directory).
         distance: Tree edit distance between the files.
         operations: List of edit operations (aligns with original command output).
+        score: Normalized similarity score (0.0-1.0).
     """
 
     file1: str
     file2: str
     distance: int
     operations: list[EditOperation]
+    score: float
 
 
 @dataclass
@@ -108,8 +116,13 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
         tree1 = parsed_trees[file1]
         tree2 = parsed_trees[file2]
 
+        # Compute tree sizes for score normalization
+        size1 = tree_size(tree1)
+        size2 = tree_size(tree2)
+
         distance, mapping = compute_distance(tree1, tree2)
         operations = interpret_mapping(mapping)
+        score = compute_score(distance, size1, size2)
 
         comparisons.append(
             PairComparison(
@@ -117,11 +130,12 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
                 file2=file2,
                 distance=distance,
                 operations=operations,
+                score=score,
             )
         )
 
-    # Sort by distance ascending (most similar first)
-    comparisons.sort(key=lambda c: c.distance)
+    # Sort by score descending (most similar first), then distance ascending for ties
+    comparisons.sort(key=lambda c: (-c.score, c.distance))
 
     return BatchComparisonResult(
         directory=str(directory),

@@ -7,7 +7,9 @@ from sql_similarity.domain.parser import parse_sql
 from sql_similarity.domain.comparator import (
     ANTLR4Config,
     compute_distance,
+    compute_score,
     interpret_mapping,
+    tree_size,
     EditOperation,
     ComparisonResult,
 )
@@ -295,14 +297,104 @@ class TestComparisonResult:
     def test_comparison_result_has_distance_and_operations(self):
         """ComparisonResult should have distance and operations fields."""
         ops = [EditOperation(type="match", source_node="A", target_node="A")]
-        result = ComparisonResult(distance=0, operations=ops)
+        result = ComparisonResult(distance=0, operations=ops, score=1.0)
 
         assert result.distance == 0
         assert result.operations == ops
 
     def test_comparison_result_operations_can_be_empty(self):
         """ComparisonResult operations can be empty list."""
-        result = ComparisonResult(distance=0, operations=[])
+        result = ComparisonResult(distance=0, operations=[], score=1.0)
 
         assert result.distance == 0
         assert result.operations == []
+
+    def test_comparison_result_has_score_field(self):
+        """ComparisonResult should have score field."""
+        ops = [EditOperation(type="match", source_node="A", target_node="A")]
+        result = ComparisonResult(distance=0, operations=ops, score=1.0)
+
+        assert result.score == 1.0
+
+    def test_comparison_result_score_can_be_fractional(self):
+        """ComparisonResult score can be a fractional value."""
+        result = ComparisonResult(distance=5, operations=[], score=0.847)
+
+        assert result.score == 0.847
+
+
+class TestTreeSize:
+    """Tests for tree_size() function."""
+
+    def test_tree_size_returns_positive_integer(self):
+        """tree_size() should return a positive integer."""
+        tree = parse_sql("SELECT id FROM users")
+        size = tree_size(tree)
+
+        assert isinstance(size, int)
+        assert size > 0
+
+    def test_tree_size_counts_all_nodes(self):
+        """tree_size() should count both rule and terminal nodes."""
+        tree = parse_sql("SELECT 1")
+        size = tree_size(tree)
+
+        # Should have at least: root + some rule nodes + terminal nodes
+        assert size > 1
+
+    def test_tree_size_larger_for_complex_query(self):
+        """tree_size() should return larger value for more complex queries."""
+        simple_tree = parse_sql("SELECT 1")
+        complex_tree = parse_sql("SELECT id, name FROM users WHERE active = true")
+
+        simple_size = tree_size(simple_tree)
+        complex_size = tree_size(complex_tree)
+
+        assert complex_size > simple_size
+
+    def test_tree_size_identical_for_identical_queries(self):
+        """tree_size() should return same value for identical queries."""
+        tree1 = parse_sql("SELECT id FROM users")
+        tree2 = parse_sql("SELECT id FROM users")
+
+        assert tree_size(tree1) == tree_size(tree2)
+
+
+class TestComputeScore:
+    """Tests for compute_score() function."""
+
+    def test_compute_score_returns_1_for_zero_distance(self):
+        """compute_score() should return 1.0 when distance is 0."""
+        score = compute_score(distance=0, size1=10, size2=10)
+        assert score == 1.0
+
+    def test_compute_score_returns_0_for_max_distance(self):
+        """compute_score() should return 0.0 when distance equals max(size1, size2)."""
+        # Max distance = max(5, 10) = 10
+        score = compute_score(distance=10, size1=5, size2=10)
+        assert score == 0.0
+
+    def test_compute_score_returns_1_for_empty_trees(self):
+        """compute_score() should return 1.0 when both trees are empty."""
+        score = compute_score(distance=0, size1=0, size2=0)
+        assert score == 1.0
+
+    def test_compute_score_returns_fractional_value(self):
+        """compute_score() should return correct fractional score."""
+        # distance=5, max(10, 10)=10, score = 1 - 5/10 = 0.5
+        score = compute_score(distance=5, size1=10, size2=10)
+        assert score == 0.5
+
+    def test_compute_score_uses_max_of_sizes(self):
+        """compute_score() should use max(size1, size2) as denominator."""
+        # distance=3, max(5, 10)=10, score = 1 - 3/10 = 0.7
+        score = compute_score(distance=3, size1=5, size2=10)
+        assert score == 0.7
+
+    def test_compute_score_between_0_and_1(self):
+        """compute_score() should always return value between 0 and 1."""
+        # Various test cases
+        assert 0.0 <= compute_score(0, 10, 10) <= 1.0
+        assert 0.0 <= compute_score(5, 10, 10) <= 1.0
+        assert 0.0 <= compute_score(10, 10, 10) <= 1.0
+        assert 0.0 <= compute_score(3, 5, 10) <= 1.0

@@ -38,6 +38,7 @@ class TestBatchComparisonResultDataclass:
             file2="b.sql",
             distance=5,
             operations=[],
+            score=0.5,
         )
         result = BatchComparisonResult(
             directory="/path/to/dir",
@@ -71,11 +72,13 @@ class TestPairComparisonDataclass:
             file2="query2.sql",
             distance=3,
             operations=[],
+            score=0.7,
         )
         assert comparison.file1 == "query1.sql"
         assert comparison.file2 == "query2.sql"
         assert comparison.distance == 3
         assert comparison.operations == []
+        assert comparison.score == 0.7
 
     def test_pair_comparison_with_operations(self):
         """PairComparison should store operations list."""
@@ -91,6 +94,7 @@ class TestPairComparisonDataclass:
             file2="b.sql",
             distance=1,
             operations=[operation],
+            score=0.9,
         )
         assert len(comparison.operations) == 1
         assert comparison.operations[0].type == "rename"
@@ -270,9 +274,9 @@ class TestFilterByMaxDistance:
     def test_filter_by_max_distance_keeps_matching_pairs(self):
         """filter_by_max_distance() should keep pairs within threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[]),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[]),
-            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[], score=0.0),
         ]
 
         filtered = filter_by_max_distance(comparisons, max_distance=5)
@@ -283,8 +287,8 @@ class TestFilterByMaxDistance:
     def test_filter_by_max_distance_removes_exceeding_pairs(self):
         """filter_by_max_distance() should remove pairs exceeding threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=10, operations=[]),
-            PairComparison(file1="a.sql", file2="c.sql", distance=20, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=10, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="c.sql", distance=20, operations=[], score=0.0),
         ]
 
         filtered = filter_by_max_distance(comparisons, max_distance=5)
@@ -294,7 +298,7 @@ class TestFilterByMaxDistance:
     def test_filter_by_max_distance_includes_equal_threshold(self):
         """filter_by_max_distance() should include pairs exactly at threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5),
         ]
 
         filtered = filter_by_max_distance(comparisons, max_distance=5)
@@ -308,9 +312,9 @@ class TestFilterByTop:
     def test_filter_by_top_returns_first_n_items(self):
         """filter_by_top() should return first N items."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[]),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[]),
-            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[], score=0.0),
         ]
 
         filtered = filter_by_top(comparisons, top=2)
@@ -322,7 +326,7 @@ class TestFilterByTop:
     def test_filter_by_top_returns_all_if_fewer_items(self):
         """filter_by_top() should return all items if fewer than N."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
         ]
 
         filtered = filter_by_top(comparisons, top=5)
@@ -336,10 +340,10 @@ class TestCombinedFilters:
     def test_combined_filters_max_distance_then_top(self):
         """Combined filters should apply max-distance first, then top."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[]),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[]),
-            PairComparison(file1="b.sql", file2="c.sql", distance=7, operations=[]),
-            PairComparison(file1="a.sql", file2="d.sql", distance=15, operations=[]),
+            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", distance=7, operations=[], score=0.3),
+            PairComparison(file1="a.sql", file2="d.sql", distance=15, operations=[], score=0.0),
         ]
 
         # First filter by max_distance 10 (keeps 3 items)

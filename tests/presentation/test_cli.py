@@ -416,3 +416,72 @@ class TestCliBatchOutputFormats:
         # Should fail with error
         assert result.returncode != 0
         assert "cannot" in result.stderr.lower() or "mutually" in result.stderr.lower() or "not allowed" in result.stderr.lower()
+
+
+# ============================================================================
+# US1 Enhancement: Recursive Directory Scanning CLI Tests (T055)
+# ============================================================================
+
+
+class TestCliRecursiveScanning:
+    """Tests for recursive directory scanning in CLI (T055)."""
+
+    def run_cli(self, *args):
+        """Run the CLI with given arguments and return result."""
+        result = subprocess.run(
+            ["uv", "run", "sql-similarity", *args],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+        return result
+
+    def test_cli_batch_mode_outputs_relative_paths_for_nested_files(self, tmp_path):
+        """CLI batch mode should output relative paths for nested files (T055)."""
+        # Create nested directory structure
+        (tmp_path / "root.sql").write_text("SELECT id FROM users")
+
+        reports_dir = tmp_path / "reports"
+        reports_dir.mkdir()
+        (reports_dir / "daily.sql").write_text("SELECT * FROM daily_metrics")
+
+        result = self.run_cli(str(tmp_path))
+
+        assert result.returncode == 0
+        # Should show relative paths with subdirectory prefix
+        assert "reports/daily.sql" in result.stdout
+        assert "root.sql" in result.stdout
+
+    def test_cli_json_output_includes_relative_paths(self, tmp_path):
+        """CLI JSON output should include relative paths for nested files."""
+        (tmp_path / "root.sql").write_text("SELECT 1")
+
+        sub = tmp_path / "subdir"
+        sub.mkdir()
+        (sub / "nested.sql").write_text("SELECT 2")
+
+        result = self.run_cli(str(tmp_path), "--json")
+
+        assert result.returncode == 0
+        parsed = json.loads(result.stdout)
+
+        # Check that relative path is in the comparison output
+        all_files = set()
+        for comp in parsed["comparisons"]:
+            all_files.add(comp["file1"])
+            all_files.add(comp["file2"])
+
+        assert "subdir/nested.sql" in all_files
+
+    def test_cli_csv_output_includes_relative_paths(self, tmp_path):
+        """CLI CSV output should include relative paths for nested files."""
+        (tmp_path / "root.sql").write_text("SELECT 1")
+
+        sub = tmp_path / "subdir"
+        sub.mkdir()
+        (sub / "nested.sql").write_text("SELECT 2")
+
+        result = self.run_cli(str(tmp_path), "--csv")
+
+        assert result.returncode == 0
+        assert "subdir/nested.sql" in result.stdout

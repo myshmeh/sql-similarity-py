@@ -65,33 +65,37 @@ class BatchComparisonResult:
 
 
 def scan_directory(directory: Union[str, Path]) -> list[str]:
-    """Scan a directory for SQL files.
+    """Scan a directory recursively for SQL files.
 
     Args:
         directory: Path to directory to scan.
 
     Returns:
-        List of SQL filenames (not full paths), sorted alphabetically.
+        List of SQL file paths relative to directory, sorted alphabetically.
         Only files with .sql extension (case-insensitive) are included.
+        Files in subdirectories are returned with relative paths (e.g., "subdir/file.sql").
     """
     dir_path = Path(directory)
     sql_files = []
 
-    for file_path in dir_path.iterdir():
+    # Use rglob("*") for recursive scanning with post-filter for case-insensitive matching
+    for file_path in dir_path.rglob("*"):
         if file_path.is_file() and file_path.suffix.lower() == ".sql":
-            sql_files.append(file_path.name)
+            # Return relative path to preserve subdirectory structure
+            sql_files.append(str(file_path.relative_to(dir_path)))
 
     return sorted(sql_files)
 
 
 def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
-    """Compare all pairs of SQL files in a directory.
+    """Compare all pairs of SQL files in a directory (recursively).
 
     Args:
         directory: Path to directory containing SQL files.
 
     Returns:
         BatchComparisonResult with all pairwise comparisons sorted by distance.
+        Files are identified by their relative paths (e.g., "subdir/file.sql").
     """
     dir_path = Path(directory)
     files = scan_directory(dir_path)
@@ -99,14 +103,15 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
     parsed_trees: dict[str, object] = {}
 
     # Parse all files first, collecting errors
-    for filename in files:
-        file_path = dir_path / filename
+    # Note: files are relative paths, so we join with dir_path
+    for relative_path in files:
+        file_path = dir_path / relative_path
         try:
             sql_content = file_path.read_text()
             tree = parse_sql(sql_content, raise_on_error=True)
-            parsed_trees[filename] = tree
+            parsed_trees[relative_path] = tree
         except ParseError as e:
-            errors.append(FileError(file=filename, error=str(e)))
+            errors.append(FileError(file=relative_path, error=str(e)))
 
     # Generate all unique pairs from successfully parsed files
     valid_files = list(parsed_trees.keys())

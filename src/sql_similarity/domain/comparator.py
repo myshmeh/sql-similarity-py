@@ -15,11 +15,15 @@ class EditOperation:
         type: One of 'match', 'rename', 'insert', 'delete'.
         source_node: Node label from tree1 (None for insert).
         target_node: Node label from tree2 (None for delete).
+        node_type: Type of node - 'rule' or 'terminal' (None for backwards compatibility).
+        tree_path: Path from root to this node (None for backwards compatibility).
     """
 
     type: str
     source_node: Optional[str]
     target_node: Optional[str]
+    node_type: Optional[str] = None
+    tree_path: Optional[str] = None
 
 
 @dataclass
@@ -127,6 +131,46 @@ def compute_distance(tree1, tree2) -> tuple[int, list]:
     return distance, mapping
 
 
+def _get_node_type(node) -> str:
+    """Determine if a node is a rule or terminal.
+
+    Args:
+        node: An ANTLR4 node.
+
+    Returns:
+        'terminal' for TerminalNode, 'rule' for ParserRuleContext.
+    """
+    if isinstance(node, TerminalNodeImpl):
+        return "terminal"
+    return "rule"
+
+
+def _get_tree_path(node) -> str:
+    """Extract the path from root to this node.
+
+    Args:
+        node: An ANTLR4 node.
+
+    Returns:
+        Path string like "Snowflake_file > Select_statement > From_clause".
+    """
+    config = ANTLR4Config()
+    path_parts = []
+    current = node
+
+    while current is not None:
+        label = config._get_label(current)
+        path_parts.append(label)
+        # Get parent - ParserRuleContext has parentCtx, TerminalNode has parentCtx too
+        current = getattr(current, "parentCtx", None)
+
+    # Reverse to get root-to-node order, exclude the current node itself
+    path_parts.reverse()
+    if len(path_parts) > 1:
+        return " > ".join(path_parts[:-1])
+    return ""
+
+
 def interpret_mapping(mapping: list) -> list[EditOperation]:
     """Convert APTED mapping to list of EditOperation objects.
 
@@ -143,35 +187,50 @@ def interpret_mapping(mapping: list) -> list[EditOperation]:
         if node1 is None:
             # INSERT: node2 was added
             label = config._get_label(node2)
+            node_type = _get_node_type(node2)
+            tree_path = _get_tree_path(node2)
             operations.append(EditOperation(
                 type="insert",
                 source_node=None,
-                target_node=label
+                target_node=label,
+                node_type=node_type,
+                tree_path=tree_path
             ))
         elif node2 is None:
             # DELETE: node1 was removed
             label = config._get_label(node1)
+            node_type = _get_node_type(node1)
+            tree_path = _get_tree_path(node1)
             operations.append(EditOperation(
                 type="delete",
                 source_node=label,
-                target_node=None
+                target_node=None,
+                node_type=node_type,
+                tree_path=tree_path
             ))
         else:
             label1 = config._get_label(node1)
             label2 = config._get_label(node2)
+            # Use node1 for type/path (source tree)
+            node_type = _get_node_type(node1)
+            tree_path = _get_tree_path(node1)
             if label1 == label2:
                 # MATCH: nodes are equivalent
                 operations.append(EditOperation(
                     type="match",
                     source_node=label1,
-                    target_node=label2
+                    target_node=label2,
+                    node_type=node_type,
+                    tree_path=tree_path
                 ))
             else:
                 # RENAME: node label changed
                 operations.append(EditOperation(
                     type="rename",
                     source_node=label1,
-                    target_node=label2
+                    target_node=label2,
+                    node_type=node_type,
+                    tree_path=tree_path
                 ))
 
     return operations

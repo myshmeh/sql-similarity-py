@@ -17,14 +17,29 @@ def format_human(result: ComparisonResult) -> str:
     lines = [f"Tree Edit Distance: {result.distance}", "", "Operations:"]
 
     for op in result.operations:
+        # Build the base operation line
         if op.type == "match":
-            lines.append(f"  MATCH:  {op.source_node}")
+            op_line = f"  MATCH:  {op.source_node}"
         elif op.type == "rename":
-            lines.append(f"  RENAME: {op.source_node} -> {op.target_node}")
+            op_line = f"  RENAME: {op.source_node} -> {op.target_node}"
         elif op.type == "insert":
-            lines.append(f"  INSERT: {op.target_node}")
+            op_line = f"  INSERT: {op.target_node}"
         elif op.type == "delete":
-            lines.append(f"  DELETE: {op.source_node}")
+            op_line = f"  DELETE: {op.source_node}"
+        else:
+            op_line = f"  {op.type.upper()}: {op.source_node or op.target_node}"
+
+        # Add detailed info if available
+        details = []
+        if op.node_type:
+            details.append(f"[{op.node_type}]")
+        if op.tree_path:
+            details.append(f"at {op.tree_path}")
+
+        if details:
+            op_line += f" {' '.join(details)}"
+
+        lines.append(op_line)
 
     return "\n".join(lines)
 
@@ -45,6 +60,8 @@ def format_json(result: ComparisonResult) -> str:
                 "type": op.type,
                 "source": op.source_node,
                 "target": op.target_node,
+                "node_type": op.node_type,
+                "tree_path": op.tree_path,
             }
             for op in result.operations
         ],

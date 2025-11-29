@@ -1,11 +1,11 @@
-"""Tests for tree comparator and ANTLR4Config."""
+"""Tests for tree comparator with sqlparse integration."""
 
 import pytest
-from antlr4.tree.Tree import TerminalNodeImpl
+from sqlparse.sql import Statement, Token, TokenList
 
 from sql_similarity.domain.parser import parse_sql
 from sql_similarity.domain.comparator import (
-    ANTLR4Config,
+    SqlparseConfig,
     compute_distance,
     compute_score,
     interpret_mapping,
@@ -15,177 +15,174 @@ from sql_similarity.domain.comparator import (
 )
 
 
-class TestANTLR4ConfigChildren:
-    """Tests for ANTLR4Config.children() method."""
+class TestSqlparseConfigChildren:
+    """Tests for SqlparseConfig.children() method."""
 
-    def test_children_returns_list_for_rule_context(self):
-        """children() should return child list for ParserRuleContext nodes."""
-        config = ANTLR4Config()
+    def test_children_returns_list_for_token_list(self):
+        """children() should return token list for TokenList nodes."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Root should have children
+        # Root Statement is a TokenList, should have children
         children = config.children(tree)
         assert isinstance(children, list)
         assert len(children) > 0
 
-    def test_children_returns_empty_for_terminal_node(self):
-        """children() should return empty list for TerminalNode."""
-        config = ANTLR4Config()
+    def test_children_returns_empty_for_leaf_token(self):
+        """children() should return empty list for Token (leaf node)."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find a terminal node (leaf)
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
+        # Find a leaf Token (not a group)
+        def find_leaf_token(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if not child.is_group:
+                        return child
+                    result = find_leaf_token(child)
+                    if result:
+                        return result
             return None
 
-        terminal = find_terminal(tree)
-        assert terminal is not None
-        assert config.children(terminal) == []
+        leaf = find_leaf_token(tree)
+        assert leaf is not None
+        assert not leaf.is_group
+        assert config.children(leaf) == []
 
 
-class TestANTLR4ConfigDelete:
-    """Tests for ANTLR4Config.delete() method."""
+class TestSqlparseConfigDelete:
+    """Tests for SqlparseConfig.delete() method."""
 
     def test_delete_returns_uniform_cost_of_1(self):
         """delete() should return uniform cost of 1."""
-        config = ANTLR4Config()
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
         # Should return 1 for any node
         assert config.delete(tree) == 1
 
-    def test_delete_returns_1_for_terminal_node(self):
-        """delete() should return 1 for terminal nodes too."""
-        config = ANTLR4Config()
+    def test_delete_returns_1_for_leaf_token(self):
+        """delete() should return 1 for leaf tokens too."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find a terminal node
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
+        # Find a leaf Token
+        def find_leaf(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if not child.is_group:
+                        return child
             return None
 
-        terminal = find_terminal(tree)
-        assert config.delete(terminal) == 1
+        leaf = find_leaf(tree)
+        assert config.delete(leaf) == 1
 
 
-class TestANTLR4ConfigInsert:
-    """Tests for ANTLR4Config.insert() method."""
+class TestSqlparseConfigInsert:
+    """Tests for SqlparseConfig.insert() method."""
 
     def test_insert_returns_uniform_cost_of_1(self):
         """insert() should return uniform cost of 1."""
-        config = ANTLR4Config()
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
         # Should return 1 for any node
         assert config.insert(tree) == 1
 
-    def test_insert_returns_1_for_terminal_node(self):
-        """insert() should return 1 for terminal nodes too."""
-        config = ANTLR4Config()
+    def test_insert_returns_1_for_leaf_token(self):
+        """insert() should return 1 for leaf tokens too."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find a terminal node
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
+        # Find a leaf Token
+        def find_leaf(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if not child.is_group:
+                        return child
             return None
 
-        terminal = find_terminal(tree)
-        assert config.insert(terminal) == 1
+        leaf = find_leaf(tree)
+        assert config.insert(leaf) == 1
 
 
-class TestANTLR4ConfigRename:
-    """Tests for ANTLR4Config.rename() method."""
+class TestSqlparseConfigRename:
+    """Tests for SqlparseConfig.rename() method."""
 
     def test_rename_returns_0_for_matching_labels(self):
         """rename() should return 0 when labels match."""
-        config = ANTLR4Config()
+        config = SqlparseConfig()
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT name FROM customers")
 
-        # Both roots are Snowflake_file, should return 0
+        # Both roots are Statement, should return 0
         assert config.rename(tree1, tree2) == 0
 
     def test_rename_returns_1_for_different_labels(self):
         """rename() should return 1 when labels differ."""
-        config = ANTLR4Config()
+        config = SqlparseConfig()
         tree1 = parse_sql("SELECT id FROM users")
         tree2 = parse_sql("SELECT id FROM users")
 
-        # Find different node types
-        def find_first_child(node):
-            children = config.children(node)
-            return children[0] if children else None
-
-        # Get different depth nodes which will have different labels
-        child1 = find_first_child(tree1)
-        # Find a terminal in tree2
-        def find_terminal(node):
-            if isinstance(node, TerminalNodeImpl):
-                return node
-            for child in config.children(node):
-                result = find_terminal(child)
-                if result:
-                    return result
+        # Find a TokenList child and a leaf Token
+        def find_group_child(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if child.is_group:
+                        return child
             return None
 
-        terminal2 = find_terminal(tree2)
+        def find_leaf(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if not child.is_group:
+                        return child
+            return None
 
-        # Rule context vs terminal should have different labels
-        if child1 and terminal2:
-            # They should have different labels (one is rule name, other is token text)
-            label1 = config._get_label(child1)
-            label2 = config._get_label(terminal2)
+        group = find_group_child(tree1)
+        leaf = find_leaf(tree2)
+
+        # Group vs leaf should have different labels
+        if group and leaf:
+            label1 = config._get_label(group)
+            label2 = config._get_label(leaf)
             if label1 != label2:
-                assert config.rename(child1, terminal2) == 1
+                assert config.rename(group, leaf) == 1
 
 
-class TestANTLR4ConfigGetLabel:
-    """Tests for ANTLR4Config._get_label() method."""
+class TestSqlparseConfigGetLabel:
+    """Tests for SqlparseConfig._get_label() method."""
 
-    def test_get_label_returns_class_name_minus_context_for_rules(self):
-        """_get_label() should return class name minus 'Context' for rule nodes."""
-        config = ANTLR4Config()
+    def test_get_label_returns_class_name_for_token_list(self):
+        """_get_label() should return class name for TokenList nodes."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Root is Snowflake_fileContext, should return "Snowflake_file"
+        # Root is Statement, should return "Statement"
         label = config._get_label(tree)
-        assert label == "Snowflake_file"
-        assert "Context" not in label
+        assert label == "Statement"
 
-    def test_get_label_returns_token_text_for_terminals(self):
-        """_get_label() should return token text for terminal nodes."""
-        config = ANTLR4Config()
+    def test_get_label_returns_normalized_value_for_leaf_tokens(self):
+        """_get_label() should return normalized value for leaf Token nodes."""
+        config = SqlparseConfig()
         tree = parse_sql("SELECT id FROM users")
 
-        # Find the SELECT terminal
-        def find_terminal_with_text(node, text):
-            if isinstance(node, TerminalNodeImpl):
-                if node.getText().upper() == text.upper():
-                    return node
-            for child in config.children(node):
-                result = find_terminal_with_text(child, text)
-                if result:
-                    return result
+        # Find the SELECT keyword token
+        def find_select_token(node):
+            if isinstance(node, TokenList):
+                for child in node.tokens:
+                    if not child.is_group and child.normalized == "SELECT":
+                        return child
+                    if child.is_group:
+                        result = find_select_token(child)
+                        if result:
+                            return result
             return None
 
-        select_terminal = find_terminal_with_text(tree, "SELECT")
-        assert select_terminal is not None
-        label = config._get_label(select_terminal)
+        select_token = find_select_token(tree)
+        assert select_token is not None
+        label = config._get_label(select_token)
+        # Should be the actual token value, not the type
         assert label == "SELECT"
 
 
@@ -290,6 +287,24 @@ class TestEditOperation:
         assert op.source_node == "OldNode"
         assert op.target_node is None
 
+    def test_edit_operation_has_node_type_field(self):
+        """EditOperation should have node_type field (group or token)."""
+        op = EditOperation(
+            type="match",
+            source_node="Statement",
+            target_node="Statement",
+            node_type="group",
+        )
+        assert op.node_type == "group"
+
+        op2 = EditOperation(
+            type="match",
+            source_node="SELECT",
+            target_node="SELECT",
+            node_type="token",
+        )
+        assert op2.node_type == "token"
+
 
 class TestComparisonResult:
     """Tests for ComparisonResult dataclass."""
@@ -335,11 +350,11 @@ class TestTreeSize:
         assert size > 0
 
     def test_tree_size_counts_all_nodes(self):
-        """tree_size() should count both rule and terminal nodes."""
+        """tree_size() should count both group and leaf token nodes."""
         tree = parse_sql("SELECT 1")
         size = tree_size(tree)
 
-        # Should have at least: root + some rule nodes + terminal nodes
+        # Should have at least: root + some tokens
         assert size > 1
 
     def test_tree_size_larger_for_complex_query(self):

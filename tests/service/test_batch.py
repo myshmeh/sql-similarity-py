@@ -216,16 +216,21 @@ class TestCompareAllPairs:
         # First comparison should be the most similar (simple1 vs simple2)
         assert result.comparisons[0].distance == 0
 
-    def test_compare_all_pairs_handles_parse_errors(self, tmp_path):
-        """compare_all_pairs() should handle parse errors gracefully (T011)."""
+    def test_compare_all_pairs_handles_empty_files(self, tmp_path):
+        """compare_all_pairs() should handle empty SQL files gracefully.
+
+        Note: sqlparse is a non-validating parser, so "invalid" SQL like
+        'SELEC id FORM users' is still parsed (just with different structure).
+        Empty files trigger the raise_on_error=True path in parse_sql.
+        """
         (tmp_path / "valid.sql").write_text("SELECT id FROM users")
-        (tmp_path / "invalid.sql").write_text("SELEC id FORM users")  # Invalid SQL
+        (tmp_path / "empty.sql").write_text("")  # Empty SQL file
 
         result = compare_all_pairs(tmp_path)
 
-        # Should have recorded the error
+        # Should have recorded the error for empty file
         assert len(result.errors) == 1
-        assert result.errors[0].file == "invalid.sql"
+        assert result.errors[0].file == "empty.sql"
         # Should still have processed valid files
         assert "valid.sql" in result.files
 

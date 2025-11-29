@@ -83,9 +83,12 @@ class TestBatchController:
     def test_execute_returns_partial_for_parse_errors(
         self, controller, tmp_path, capsys
     ):
-        """execute() should return BATCH_PARTIAL when some files have errors."""
+        """execute() should return BATCH_PARTIAL when some files have errors.
+
+        Note: sqlparse is a non-validating parser. Only empty files trigger errors.
+        """
         (tmp_path / "valid.sql").write_text("SELECT id FROM users")
-        (tmp_path / "invalid.sql").write_text("SELEC id FORM")
+        (tmp_path / "empty.sql").write_text("")  # Empty file triggers ParseError
 
         args = argparse.Namespace(
             path1=str(tmp_path),

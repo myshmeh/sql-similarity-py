@@ -1,10 +1,7 @@
-"""SQL parsing using Snowflake ANTLR4 grammar."""
+"""SQL parsing using sqlparse library."""
 
-from antlr4 import CommonTokenStream, InputStream
-from antlr4.error.ErrorListener import ErrorListener
-
-from sql_similarity.grammars.snowflake.SnowflakeLexer import SnowflakeLexer
-from sql_similarity.grammars.snowflake.SnowflakeParser import SnowflakeParser
+import sqlparse
+from sqlparse.sql import Statement
 
 
 class ParseError(Exception):
@@ -28,46 +25,37 @@ class ParseError(Exception):
         return self.message
 
 
-class _ErrorCollector(ErrorListener):
-    """Collects syntax errors from ANTLR4 parser."""
-
-    def __init__(self):
-        self.errors = []
-
-    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
-        self.errors.append(ParseError(msg, line, column))
-
-
-def parse_sql(sql_text: str, raise_on_error: bool = False) -> SnowflakeParser.Snowflake_fileContext:
-    """Parse SQL text into an ANTLR4 parse tree.
+def parse_sql(sql_text: str, raise_on_error: bool = False) -> Statement:
+    """Parse SQL text into a sqlparse Statement.
 
     Args:
         sql_text: SQL query string to parse.
-        raise_on_error: If True, raise ParseError on syntax errors.
+        raise_on_error: If True, raise ParseError on empty/whitespace-only SQL.
 
     Returns:
-        ANTLR4 parse tree with Snowflake_fileContext as root.
+        sqlparse Statement object representing the parsed SQL.
 
     Raises:
-        ParseError: If raise_on_error is True and parsing fails.
+        ParseError: If raise_on_error is True and SQL is empty or whitespace-only.
     """
-    input_stream = InputStream(sql_text)
-    lexer = SnowflakeLexer(input_stream)
-    token_stream = CommonTokenStream(lexer)
-    parser = SnowflakeParser(token_stream)
+    statements = sqlparse.parse(sql_text)
 
-    if raise_on_error:
-        # Remove default error listeners and add our collector
-        error_collector = _ErrorCollector()
-        lexer.removeErrorListeners()
-        lexer.addErrorListener(error_collector)
-        parser.removeErrorListeners()
-        parser.addErrorListener(error_collector)
+    if not statements or not statements[0].tokens:
+        if raise_on_error:
+            raise ParseError("No SQL statements found")
+        # Return an empty Statement for compatibility
+        return Statement([])
 
-    tree = parser.snowflake_file()
+    first_statement = statements[0]
 
-    if raise_on_error and error_collector.errors:
-        # Raise the first error encountered
-        raise error_collector.errors[0]
+    # Check if statement contains only whitespace tokens
+    has_meaningful_content = any(
+        not token.is_whitespace for token in first_statement.tokens
+    )
 
-    return tree
+    if not has_meaningful_content:
+        if raise_on_error:
+            raise ParseError("No SQL statements found")
+        return Statement([])
+
+    return first_statement

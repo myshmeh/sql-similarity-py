@@ -152,8 +152,8 @@ class TestCliErrorHandling:
 
         assert result.returncode == 0
         assert "usage" in result.stdout.lower()
-        assert "file1" in result.stdout.lower()
-        assert "file2" in result.stdout.lower()
+        assert "path1" in result.stdout.lower()
+        assert "path2" in result.stdout.lower()
 
     def test_version_flag_shows_version(self):
         """CLI should show version with --version flag."""
@@ -163,3 +163,256 @@ class TestCliErrorHandling:
         # Version should be in output (either stdout or contain version number)
         output = result.stdout + result.stderr
         assert "0.1.0" in output or "version" in output.lower()
+
+
+# ============================================================================
+# US1 Tests: Batch Mode CLI
+# ============================================================================
+
+
+class TestCliBatchMode:
+    """Tests for batch mode CLI (T012-T016)."""
+
+    def run_cli(self, *args):
+        """Run the CLI with given arguments and return result."""
+        result = subprocess.run(
+            ["uv", "run", "sql-similarity", *args],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+        return result
+
+    @pytest.fixture
+    def fixtures_dir(self):
+        """Return path to test fixtures directory."""
+        return Path(__file__).parent.parent / "fixtures"
+
+    def test_cli_detects_directory_argument(self, fixtures_dir):
+        """CLI should detect when first argument is a directory (T012)."""
+        result = self.run_cli(str(fixtures_dir))
+
+        # Should succeed and show batch output
+        assert result.returncode == 0
+        assert "Batch Comparison:" in result.stdout
+
+    def test_cli_outputs_table_format_for_batch_mode(self, fixtures_dir):
+        """CLI should output table format for batch mode (T013)."""
+        result = self.run_cli(str(fixtures_dir))
+
+        assert result.returncode == 0
+        # Should have table header elements
+        assert "File 1" in result.stdout
+        assert "File 2" in result.stdout
+        assert "Distance" in result.stdout
+        # Should show file count info
+        assert "Files:" in result.stdout
+        assert "Comparisons:" in result.stdout
+
+    def test_cli_exit_code_2_for_no_sql_files(self, tmp_path):
+        """CLI should return exit code 2 for no SQL files (T014)."""
+        # Create empty directory (or with non-sql files)
+        (tmp_path / "readme.txt").write_text("Not an SQL file")
+
+        result = self.run_cli(str(tmp_path))
+
+        assert result.returncode == 2
+        assert "No .sql files found" in result.stderr
+
+    def test_cli_exit_code_3_for_directory_not_found(self):
+        """CLI should return exit code 3 for directory not found (T015)."""
+        result = self.run_cli("/nonexistent/directory/path")
+
+        assert result.returncode == 3
+        assert "Directory not found" in result.stderr
+
+    def test_cli_exit_code_1_for_partial_success(self, tmp_path):
+        """CLI should return exit code 1 for partial success with parse errors (T016)."""
+        # Create one valid and one invalid SQL file
+        (tmp_path / "valid.sql").write_text("SELECT id FROM users")
+        (tmp_path / "invalid.sql").write_text("SELEC id FORM")
+
+        result = self.run_cli(str(tmp_path))
+
+        assert result.returncode == 1
+        assert "Errors:" in result.stdout
+        assert "invalid.sql" in result.stdout
+
+    def test_cli_batch_shows_sorted_results(self, tmp_path):
+        """CLI batch mode should show results sorted by distance ascending."""
+        # Create files with different similarities
+        (tmp_path / "a.sql").write_text("SELECT id FROM users")
+        (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical to a
+        (tmp_path / "c.sql").write_text(
+            "SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id"
+        )
+
+        result = self.run_cli(str(tmp_path))
+
+        assert result.returncode == 0
+        # Find lines with distances and verify order
+        lines = result.stdout.split("\n")
+        distance_lines = [l for l in lines if l.strip() and ".sql" in l]
+        # First comparison should be a.sql vs b.sql with distance 0
+        if distance_lines:
+            first_line = distance_lines[0]
+            assert "0" in first_line or "a.sql" in first_line
+
+
+# ============================================================================
+# US2 Tests: Filter CLI Options
+# ============================================================================
+
+
+class TestCliFilterOptions:
+    """Tests for CLI filter options (T025-T031)."""
+
+    def run_cli(self, *args):
+        """Run the CLI with given arguments and return result."""
+        result = subprocess.run(
+            ["uv", "run", "sql-similarity", *args],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+        return result
+
+    def test_cli_max_distance_flag(self, tmp_path):
+        """CLI should filter results by --max-distance (T025)."""
+        # Create files with varying distances
+        (tmp_path / "a.sql").write_text("SELECT id FROM users")
+        (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical
+        (tmp_path / "c.sql").write_text(
+            "SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id"
+        )
+
+        result = self.run_cli(str(tmp_path), "--max-distance", "5")
+
+        assert result.returncode == 0
+        # Should only show pairs with distance <= 5
+        assert "a.sql" in result.stdout
+        assert "b.sql" in result.stdout
+        # Header should indicate filter
+        assert "max distance: 5" in result.stdout
+
+    def test_cli_top_flag(self, tmp_path):
+        """CLI should filter results by --top (T026)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+        (tmp_path / "b.sql").write_text("SELECT 2")
+        (tmp_path / "c.sql").write_text("SELECT 3")
+        (tmp_path / "d.sql").write_text("SELECT 4")
+
+        result = self.run_cli(str(tmp_path), "--top", "2")
+
+        assert result.returncode == 0
+        # Should show "Showing: 2 of X" in header
+        assert "top 2" in result.stdout
+
+    def test_cli_combined_max_distance_and_top(self, tmp_path):
+        """CLI should combine --max-distance and --top filters (T027)."""
+        (tmp_path / "a.sql").write_text("SELECT id FROM users")
+        (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical
+        (tmp_path / "c.sql").write_text("SELECT name FROM customers")
+        (tmp_path / "d.sql").write_text(
+            "SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id"
+        )
+
+        result = self.run_cli(str(tmp_path), "--max-distance", "20", "--top", "2")
+
+        assert result.returncode == 0
+        assert "max distance: 20" in result.stdout
+        assert "top 2" in result.stdout
+
+    def test_cli_exit_code_4_for_invalid_max_distance(self, tmp_path):
+        """CLI should return exit code 4 for negative --max-distance (T028)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+
+        result = self.run_cli(str(tmp_path), "--max-distance", "-1")
+
+        assert result.returncode == 4
+        assert "must be" in result.stderr.lower() or "invalid" in result.stderr.lower()
+
+    def test_cli_exit_code_4_for_invalid_top(self, tmp_path):
+        """CLI should return exit code 4 for zero or negative --top (T029)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+
+        result = self.run_cli(str(tmp_path), "--top", "0")
+
+        assert result.returncode == 4
+        assert "must be" in result.stderr.lower() or "invalid" in result.stderr.lower()
+
+    def test_table_header_shows_filter_info(self, tmp_path):
+        """CLI table header should show filter info (T030)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+        (tmp_path / "b.sql").write_text("SELECT 2")
+
+        result = self.run_cli(str(tmp_path), "--max-distance", "10")
+
+        assert result.returncode == 0
+        assert "(max distance: 10)" in result.stdout
+
+    def test_table_header_shows_filtered_count(self, tmp_path):
+        """CLI table header should show 'Showing: X of Y' when filtered (T031)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+        (tmp_path / "b.sql").write_text("SELECT 2")
+        (tmp_path / "c.sql").write_text("SELECT 3")
+
+        result = self.run_cli(str(tmp_path), "--top", "1")
+
+        assert result.returncode == 0
+        assert "Showing:" in result.stdout
+
+
+# ============================================================================
+# US3 Tests: Output Formats CLI
+# ============================================================================
+
+
+class TestCliBatchOutputFormats:
+    """Tests for CLI batch output format options (T041-T043)."""
+
+    def run_cli(self, *args):
+        """Run the CLI with given arguments and return result."""
+        result = subprocess.run(
+            ["uv", "run", "sql-similarity", *args],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+        return result
+
+    def test_cli_json_flag_for_batch_mode(self, tmp_path):
+        """CLI --json flag should output JSON for batch mode (T041)."""
+        (tmp_path / "a.sql").write_text("SELECT id FROM users")
+        (tmp_path / "b.sql").write_text("SELECT name FROM customers")
+
+        result = self.run_cli(str(tmp_path), "--json")
+
+        assert result.returncode == 0
+        parsed = json.loads(result.stdout)
+        assert "directory" in parsed
+        assert "comparisons" in parsed
+        assert "operations" in parsed["comparisons"][0]
+
+    def test_cli_csv_flag_for_batch_mode(self, tmp_path):
+        """CLI --csv flag should output CSV for batch mode (T042)."""
+        (tmp_path / "a.sql").write_text("SELECT id FROM users")
+        (tmp_path / "b.sql").write_text("SELECT name FROM customers")
+
+        result = self.run_cli(str(tmp_path), "--csv")
+
+        assert result.returncode == 0
+        lines = result.stdout.strip().split("\n")
+        assert lines[0] == "file1,file2,distance"
+        assert len(lines) == 2  # header + 1 comparison
+
+    def test_json_and_csv_are_mutually_exclusive(self, tmp_path):
+        """CLI --json and --csv should be mutually exclusive (T043)."""
+        (tmp_path / "a.sql").write_text("SELECT 1")
+        (tmp_path / "b.sql").write_text("SELECT 2")
+
+        result = self.run_cli(str(tmp_path), "--json", "--csv")
+
+        # Should fail with error
+        assert result.returncode != 0
+        assert "cannot" in result.stderr.lower() or "mutually" in result.stderr.lower() or "not allowed" in result.stderr.lower()

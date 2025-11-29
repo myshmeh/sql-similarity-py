@@ -49,16 +49,17 @@ class SqlparseConfig(Config):
     """
 
     def children(self, node):
-        """Return child tokens of a sqlparse node.
+        """Return child tokens of a sqlparse node, excluding whitespace.
 
         Args:
             node: A sqlparse Token or TokenList.
 
         Returns:
-            List of child tokens for TokenList, empty list for Token (leaf).
+            List of non-whitespace child tokens for TokenList, empty list for Token (leaf).
         """
         if isinstance(node, TokenList):
-            return list(node.tokens)
+            # Filter out whitespace tokens - they add noise to similarity comparison
+            return [child for child in node.tokens if not child.is_whitespace]
         # Leaf Token has no children
         return []
 

@@ -1,5 +1,7 @@
 # sql-similarity
 
+![Experimental](https://img.shields.io/badge/status-experimental-red)
+
 A CLI tool to compare SQL files using tree edit distance. It parses SQL statements into abstract syntax trees and computes structural similarity using the APTED algorithm.
 
 ## Overview
@@ -16,20 +18,36 @@ The tool supports two modes:
 
 ## Installation
 
+Install directly from GitHub:
+
+```bash
+uv pip install git+https://github.com/myshmeh/sql-similarity-py.git
+```
+
+Or with pip:
+
+```bash
+pip install git+https://github.com/myshmeh/sql-similarity-py.git
+```
+
+### For Development
+
 ```bash
 git clone https://github.com/myshmeh/sql-similarity-py.git
-cd sql-similarity-py
-uv sync
+cd sql-similarity
+uv sync --dev
 ```
 
 ## Usage
+
+After installation, the `sql-similarity` command is available globally.
 
 ### Pair Mode
 
 Compare two SQL files:
 
 ```bash
-uv run sql-similarity file1.sql file2.sql
+sql-similarity file1.sql file2.sql
 ```
 
 Output includes:
@@ -42,7 +60,7 @@ Output includes:
 Compare all `.sql` files in a directory:
 
 ```bash
-uv run sql-similarity /path/to/sql/directory
+sql-similarity /path/to/sql/directory
 ```
 
 This compares all pairs of SQL files and outputs results sorted by similarity.
@@ -51,38 +69,38 @@ This compares all pairs of SQL files and outputs results sorted by similarity.
 
 **JSON output:**
 ```bash
-uv run sql-similarity file1.sql file2.sql --json
-uv run sql-similarity /path/to/directory --json
+sql-similarity file1.sql file2.sql --json
+sql-similarity /path/to/directory --json
 ```
 
 **CSV output (batch mode only):**
 ```bash
-uv run sql-similarity /path/to/directory --csv
+sql-similarity /path/to/directory --csv
 ```
 
 ### Filtering Options (Batch Mode)
 
 Limit results by maximum distance:
 ```bash
-uv run sql-similarity /path/to/directory --max-distance 10
+sql-similarity /path/to/directory --max-distance 10
 ```
 
 Show only the top N most similar pairs:
 ```bash
-uv run sql-similarity /path/to/directory --top 5
+sql-similarity /path/to/directory --top 5
 ```
 
 ### Version
 
 ```bash
-uv run sql-similarity --version
+sql-similarity --version
 ```
 
 ## Development
 
-Install development dependencies:
-
 ```bash
+git clone https://github.com/myshmeh/sql-similarity-py.git
+cd sql-similarity
 uv sync --dev
 ```
 
@@ -91,3 +109,23 @@ Run tests:
 ```bash
 uv run pytest
 ```
+
+## Uninstall
+
+```bash
+uv pip uninstall sql-similarity
+```
+
+Or with pip:
+
+```bash
+pip uninstall sql-similarity
+```
+
+## Requirements
+
+- Python 3.11+
+
+## License
+
+MIT

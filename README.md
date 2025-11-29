@@ -18,7 +18,7 @@ The tool supports two modes:
 
 ## Supported SQL Dialects
 
-sqlparse is a non-validating SQL parser, therefore it should work most of the dialects.
+sqlparse is a non-validating SQL parser, therefore it should work in most of the dialects.
 
 ## Usage
 

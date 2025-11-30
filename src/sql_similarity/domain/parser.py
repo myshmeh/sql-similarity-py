@@ -1,7 +1,7 @@
-"""SQL parsing using sqlparse library."""
+"""SQL parsing using sqlglot library."""
 
-import sqlparse
-from sqlparse.sql import Statement
+from sqlglot import parse_one, exp
+from sqlglot.errors import ParseError as SqlglotParseError
 
 
 class ParseError(Exception):
@@ -25,37 +25,30 @@ class ParseError(Exception):
         return self.message
 
 
-def parse_sql(sql_text: str, raise_on_error: bool = False) -> Statement:
-    """Parse SQL text into a sqlparse Statement.
+def parse_sql(sql_text: str, raise_on_error: bool = False) -> exp.Expression | None:
+    """Parse SQL text into a sqlglot Expression.
 
     Args:
         sql_text: SQL query string to parse.
-        raise_on_error: If True, raise ParseError on empty/whitespace-only SQL.
+        raise_on_error: If True, raise ParseError on empty/whitespace-only/invalid SQL.
 
     Returns:
-        sqlparse Statement object representing the parsed SQL.
+        sqlglot Expression object representing the parsed SQL, or None if parsing fails
+        and raise_on_error is False.
 
     Raises:
-        ParseError: If raise_on_error is True and SQL is empty or whitespace-only.
+        ParseError: If raise_on_error is True and SQL is empty, whitespace-only, or invalid.
     """
-    statements = sqlparse.parse(sql_text)
-
-    if not statements or not statements[0].tokens:
+    # Check for empty or whitespace-only input
+    if not sql_text or not sql_text.strip():
         if raise_on_error:
             raise ParseError("No SQL statements found")
-        # Return an empty Statement for compatibility
-        return Statement([])
+        return None
 
-    first_statement = statements[0]
-
-    # Check if statement contains only whitespace tokens
-    has_meaningful_content = any(
-        not token.is_whitespace for token in first_statement.tokens
-    )
-
-    if not has_meaningful_content:
+    try:
+        result = parse_one(sql_text)
+        return result
+    except SqlglotParseError as e:
         if raise_on_error:
-            raise ParseError("No SQL statements found")
-        return Statement([])
-
-    return first_statement
+            raise ParseError(str(e))
+        return None

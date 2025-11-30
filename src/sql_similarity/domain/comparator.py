@@ -1,10 +1,10 @@
-"""Tree edit distance computation using APTED with sqlparse integration."""
+"""SQL comparison using sqlglot diff."""
 
 from dataclasses import dataclass
 from typing import Optional
 
-from apted import APTED, Config
-from sqlparse.sql import TokenList
+from sqlglot import diff, exp
+from sqlglot.diff import Insert, Remove, Move, Update, Keep
 
 
 @dataclass
@@ -12,10 +12,10 @@ class EditOperation:
     """A single transformation step in the edit sequence.
 
     Attributes:
-        type: One of 'match', 'rename', 'insert', 'delete'.
+        type: One of 'match', 'rename', 'insert', 'delete', 'move'.
         source_node: Node label from tree1 (None for insert).
         target_node: Node label from tree2 (None for delete).
-        node_type: Type of node - 'group' or 'token'.
+        node_type: Type of node (expression class name).
         tree_path: Path from root to this node.
     """
 
@@ -31,251 +31,154 @@ class ComparisonResult:
     """Result of comparing two SQL parse trees.
 
     Attributes:
-        distance: Tree edit distance (minimum edit operations).
+        edit_count: Number of edit operations (excluding matches).
         operations: Sequence of edit operations.
         score: Normalized similarity score (0.0-1.0).
     """
 
-    distance: int
+    edit_count: int
     operations: list[EditOperation]
     score: float
 
 
-class SqlparseConfig(Config):
-    """APTED config for traversing sqlparse token trees directly.
-
-    This configuration teaches APTED how to work with sqlparse tokens
-    without requiring an intermediate transformation layer.
-    """
-
-    def children(self, node):
-        """Return child tokens of a sqlparse node, excluding whitespace.
-
-        Args:
-            node: A sqlparse Token or TokenList.
-
-        Returns:
-            List of non-whitespace child tokens for TokenList, empty list for Token (leaf).
-        """
-        if isinstance(node, TokenList):
-            # Filter out whitespace tokens - they add noise to similarity comparison
-            return [child for child in node.tokens if not child.is_whitespace]
-        # Leaf Token has no children
-        return []
-
-    def delete(self, node):
-        """Cost of deleting a node.
-
-        Args:
-            node: The node to delete.
-
-        Returns:
-            Uniform cost of 1.
-        """
-        return 1
-
-    def insert(self, node):
-        """Cost of inserting a node.
-
-        Args:
-            node: The node to insert.
-
-        Returns:
-            Uniform cost of 1.
-        """
-        return 1
-
-    def rename(self, node1, node2):
-        """Cost of renaming node1 to node2.
-
-        Args:
-            node1: Source node.
-            node2: Target node.
-
-        Returns:
-            0 if labels match, 1 otherwise.
-        """
-        label1 = self._get_label(node1)
-        label2 = self._get_label(node2)
-        return 0 if label1 == label2 else 1
-
-    def _get_label(self, node):
-        """Extract a label for comparison.
-
-        Args:
-            node: A sqlparse Token or TokenList.
-
-        Returns:
-            For TokenList (groups): class name (e.g., "Statement", "Where").
-            For Token (leaf): normalized value (e.g., "SELECT", "id", "users").
-        """
-        if isinstance(node, TokenList):
-            return type(node).__name__
-        # For Token: use the actual normalized value for accurate comparison
-        return node.normalized
-
-
-def tree_size(node) -> int:
-    """Count total nodes in a sqlparse token tree.
+def count_nodes(expr: exp.Expression | None) -> int:
+    """Count total nodes in a sqlglot expression tree.
 
     Args:
-        node: Root of sqlparse token tree.
+        expr: Root of sqlglot expression tree.
 
     Returns:
-        Total number of nodes (groups + leaf tokens).
+        Total number of nodes in the tree, 0 if expr is None.
     """
-    config = SqlparseConfig()
-    children = config.children(node)
-    return 1 + sum(tree_size(child) for child in children)
+    if expr is None:
+        return 0
+    return sum(1 for _ in expr.walk())
 
 
-def compute_score(distance: int, size1: int, size2: int) -> float:
+def compute_score(keeps: int, total: int) -> float:
     """Compute normalized similarity score.
 
-    Formula: 1 - (distance / max(size1, size2))
+    Formula: keeps / total
 
     Args:
-        distance: Tree edit distance.
-        size1: Size of first tree.
-        size2: Size of second tree.
+        keeps: Number of Keep (match) operations.
+        total: Total number of operations.
 
     Returns:
         Score between 0.0 (completely different) and 1.0 (identical).
-        Returns 1.0 if both trees are empty (max size = 0).
+        Returns 1.0 if total is 0 (both trees empty = identical).
     """
-    max_size = max(size1, size2)
-    if max_size == 0:
+    if total == 0:
         return 1.0
-    return 1.0 - (distance / max_size)
+    return keeps / total
 
 
-def compute_distance(tree1, tree2) -> tuple[int, list]:
-    """Compute tree edit distance between two sqlparse token trees.
+def _get_label(expr: exp.Expression) -> str:
+    """Get a label for an expression node.
 
     Args:
-        tree1: First sqlparse token tree.
-        tree2: Second sqlparse token tree.
+        expr: A sqlglot Expression node.
 
     Returns:
-        Tuple of (distance, mapping) where:
-        - distance: Integer tree edit distance.
-        - mapping: List of (node1, node2) tuples from APTED.
+        SQL representation of the node (truncated if too long).
     """
-    config = SqlparseConfig()
-    apted = APTED(tree1, tree2, config)
-    distance = apted.compute_edit_distance()
-    mapping = apted.compute_edit_mapping()
-    return distance, mapping
+    sql = expr.sql()
+    if len(sql) > 50:
+        return sql[:47] + "..."
+    return sql
 
 
-def _get_node_type(node) -> str:
-    """Determine if a node is a group or token.
+def interpret_edits(edits: list) -> list[EditOperation]:
+    """Convert sqlglot edits to list of EditOperation objects.
 
     Args:
-        node: A sqlparse node.
-
-    Returns:
-        'group' for TokenList, 'token' for Token (leaf).
-    """
-    if isinstance(node, TokenList):
-        return "group"
-    return "token"
-
-
-def _get_tree_path(node) -> str:
-    """Extract the path from root to this node.
-
-    Args:
-        node: A sqlparse node.
-
-    Returns:
-        Path string like "Statement > Identifier > Name".
-    """
-    config = SqlparseConfig()
-    path_parts = []
-    current = node
-
-    while current is not None:
-        label = config._get_label(current)
-        path_parts.append(label)
-        # Get parent - sqlparse tokens have parent attribute
-        current = getattr(current, "parent", None)
-
-    # Reverse to get root-to-node order, exclude the current node itself
-    path_parts.reverse()
-    if len(path_parts) > 1:
-        return " > ".join(path_parts[:-1])
-    return ""
-
-
-def interpret_mapping(mapping: list) -> list[EditOperation]:
-    """Convert APTED mapping to list of EditOperation objects.
-
-    Args:
-        mapping: List of (node1, node2) tuples from APTED.compute_edit_mapping().
+        edits: List of sqlglot diff edit operations.
 
     Returns:
         List of EditOperation objects representing the transformation.
     """
-    config = SqlparseConfig()
     operations = []
 
-    for node1, node2 in mapping:
-        if node1 is None:
-            # INSERT: node2 was added
-            label = config._get_label(node2)
-            node_type = _get_node_type(node2)
-            tree_path = _get_tree_path(node2)
+    for edit in edits:
+        if isinstance(edit, Keep):
+            operations.append(
+                EditOperation(
+                    type="match",
+                    source_node=_get_label(edit.source),
+                    target_node=_get_label(edit.target),
+                    node_type=type(edit.source).__name__,
+                )
+            )
+        elif isinstance(edit, Update):
+            operations.append(
+                EditOperation(
+                    type="rename",
+                    source_node=_get_label(edit.source),
+                    target_node=_get_label(edit.target),
+                    node_type=type(edit.source).__name__,
+                )
+            )
+        elif isinstance(edit, Insert):
             operations.append(
                 EditOperation(
                     type="insert",
                     source_node=None,
-                    target_node=label,
-                    node_type=node_type,
-                    tree_path=tree_path,
+                    target_node=_get_label(edit.expression),
+                    node_type=type(edit.expression).__name__,
                 )
             )
-        elif node2 is None:
-            # DELETE: node1 was removed
-            label = config._get_label(node1)
-            node_type = _get_node_type(node1)
-            tree_path = _get_tree_path(node1)
+        elif isinstance(edit, Remove):
             operations.append(
                 EditOperation(
                     type="delete",
-                    source_node=label,
+                    source_node=_get_label(edit.expression),
                     target_node=None,
-                    node_type=node_type,
-                    tree_path=tree_path,
+                    node_type=type(edit.expression).__name__,
                 )
             )
-        else:
-            label1 = config._get_label(node1)
-            label2 = config._get_label(node2)
-            # Use node1 for type/path (source tree)
-            node_type = _get_node_type(node1)
-            tree_path = _get_tree_path(node1)
-            if label1 == label2:
-                # MATCH: nodes are equivalent
-                operations.append(
-                    EditOperation(
-                        type="match",
-                        source_node=label1,
-                        target_node=label2,
-                        node_type=node_type,
-                        tree_path=tree_path,
-                    )
+        elif isinstance(edit, Move):
+            operations.append(
+                EditOperation(
+                    type="move",
+                    source_node=_get_label(edit.source),
+                    target_node=_get_label(edit.target),
+                    node_type=type(edit.source).__name__,
                 )
-            else:
-                # RENAME: node label changed
-                operations.append(
-                    EditOperation(
-                        type="rename",
-                        source_node=label1,
-                        target_node=label2,
-                        node_type=node_type,
-                        tree_path=tree_path,
-                    )
-                )
+            )
 
     return operations
+
+
+def compare_trees(
+    tree1: exp.Expression | None, tree2: exp.Expression | None
+) -> ComparisonResult:
+    """Compare two SQL expression trees and return comparison result.
+
+    Args:
+        tree1: First sqlglot expression tree (or None).
+        tree2: Second sqlglot expression tree (or None).
+
+    Returns:
+        ComparisonResult with edit_count, operations, and score.
+    """
+    # Handle None cases
+    if tree1 is None and tree2 is None:
+        return ComparisonResult(edit_count=0, operations=[], score=1.0)
+
+    if tree1 is None or tree2 is None:
+        # One tree is None, the other is not - completely different
+        return ComparisonResult(edit_count=1, operations=[], score=0.0)
+
+    # Get edit operations using sqlglot diff
+    edits = diff(tree1, tree2)
+
+    # Convert to EditOperation objects
+    operations = interpret_edits(edits)
+
+    # Calculate score based on Keep ratio
+    keeps = sum(1 for op in operations if op.type == "match")
+    total = len(operations)
+    edit_count = total - keeps
+    score = compute_score(keeps, total)
+
+    return ComparisonResult(edit_count=edit_count, operations=operations, score=score)

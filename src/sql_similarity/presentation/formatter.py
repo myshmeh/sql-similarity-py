@@ -9,14 +9,14 @@ def format_human(result: ComparisonResult) -> str:
     """Format comparison result for human-readable output.
 
     Args:
-        result: ComparisonResult with distance, operations, and score.
+        result: ComparisonResult with edit_count, operations, and score.
 
     Returns:
-        Human-readable string with score, distance, and operations list.
+        Human-readable string with score, edit count, and operations list.
     """
     lines = [
         f"Similarity Score: {result.score:.3g}",
-        f"Tree Edit Distance: {result.distance}",
+        f"Edit Count: {result.edit_count}",
         "",
         "Operations:",
     ]
@@ -53,14 +53,14 @@ def format_json(result: ComparisonResult) -> str:
     """Format comparison result as JSON.
 
     Args:
-        result: ComparisonResult with distance, operations, and score.
+        result: ComparisonResult with edit_count, operations, and score.
 
     Returns:
-        JSON string with score, distance, and operations array.
+        JSON string with score, edit_count, and operations array.
     """
     data = {
         "score": result.score,
-        "distance": result.distance,
+        "edit_count": result.edit_count,
         "operations": [
             {
                 "type": op.type,

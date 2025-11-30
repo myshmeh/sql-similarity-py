@@ -13,7 +13,7 @@ class TestFormatHuman:
     def test_format_human_includes_score(self):
         """format_human() should include 'Similarity Score: X.XXX' line."""
         result = ComparisonResult(
-            distance=3,
+            edit_count=3,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -24,10 +24,10 @@ class TestFormatHuman:
 
         assert "Similarity Score: 0.847" in output
 
-    def test_format_human_includes_distance(self):
-        """format_human() should include 'Tree Edit Distance: N' line."""
+    def test_format_human_includes_edit_count(self):
+        """format_human() should include 'Edit Count: N' line."""
         result = ComparisonResult(
-            distance=3,
+            edit_count=3,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -36,12 +36,12 @@ class TestFormatHuman:
 
         output = format_human(result)
 
-        assert "Tree Edit Distance: 3" in output
+        assert "Edit Count: 3" in output
 
     def test_format_human_includes_operations_header(self):
         """format_human() should include 'Operations:' header."""
         result = ComparisonResult(
-            distance=0,
+            edit_count=0,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -55,7 +55,7 @@ class TestFormatHuman:
     def test_format_human_formats_match_operation(self):
         """format_human() should format MATCH operations correctly."""
         result = ComparisonResult(
-            distance=0,
+            edit_count=0,
             operations=[
                 EditOperation(type="match", source_node="Select_clause", target_node="Select_clause")
             ],
@@ -69,7 +69,7 @@ class TestFormatHuman:
     def test_format_human_formats_rename_operation(self):
         """format_human() should format RENAME operations with arrow."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(type="rename", source_node="users", target_node="customers")
             ],
@@ -83,7 +83,7 @@ class TestFormatHuman:
     def test_format_human_formats_insert_operation(self):
         """format_human() should format INSERT operations."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(type="insert", source_node=None, target_node="Where_clause")
             ],
@@ -97,7 +97,7 @@ class TestFormatHuman:
     def test_format_human_formats_delete_operation(self):
         """format_human() should format DELETE operations."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(type="delete", source_node="Order_by_clause", target_node=None)
             ],
@@ -110,11 +110,11 @@ class TestFormatHuman:
 
     def test_format_human_handles_empty_operations(self):
         """format_human() should handle empty operations list."""
-        result = ComparisonResult(distance=0, operations=[], score=1.0)
+        result = ComparisonResult(edit_count=0, operations=[], score=1.0)
 
         output = format_human(result)
 
-        assert "Tree Edit Distance: 0" in output
+        assert "Edit Count: 0" in output
         assert "Operations:" in output
 
 
@@ -124,7 +124,7 @@ class TestFormatJson:
     def test_format_json_returns_valid_json(self):
         """format_json() should return valid JSON string."""
         result = ComparisonResult(
-            distance=3,
+            edit_count=3,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -139,7 +139,7 @@ class TestFormatJson:
     def test_format_json_includes_score(self):
         """format_json() should include score field."""
         result = ComparisonResult(
-            distance=5,
+            edit_count=5,
             operations=[],
             score=0.5
         )
@@ -150,10 +150,10 @@ class TestFormatJson:
         assert "score" in parsed
         assert parsed["score"] == 0.5
 
-    def test_format_json_includes_distance(self):
-        """format_json() should include distance field."""
+    def test_format_json_includes_edit_count(self):
+        """format_json() should include edit_count field."""
         result = ComparisonResult(
-            distance=5,
+            edit_count=5,
             operations=[],
             score=0.5
         )
@@ -161,13 +161,13 @@ class TestFormatJson:
         output = format_json(result)
         parsed = json.loads(output)
 
-        assert "distance" in parsed
-        assert parsed["distance"] == 5
+        assert "edit_count" in parsed
+        assert parsed["edit_count"] == 5
 
     def test_format_json_includes_operations_array(self):
         """format_json() should include operations array."""
         result = ComparisonResult(
-            distance=0,
+            edit_count=0,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -183,7 +183,7 @@ class TestFormatJson:
     def test_format_json_operation_has_type_source_target(self):
         """format_json() operations should have type, source, target fields."""
         result = ComparisonResult(
-            distance=0,
+            edit_count=0,
             operations=[
                 EditOperation(type="match", source_node="Snowflake_file", target_node="Snowflake_file")
             ],
@@ -201,7 +201,7 @@ class TestFormatJson:
     def test_format_json_insert_has_null_source(self):
         """format_json() INSERT operations should have null source."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(type="insert", source_node=None, target_node="Where_clause")
             ],
@@ -219,7 +219,7 @@ class TestFormatJson:
     def test_format_json_delete_has_null_target(self):
         """format_json() DELETE operations should have null target."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(type="delete", source_node="Order_by_clause", target_node=None)
             ],
@@ -236,12 +236,12 @@ class TestFormatJson:
 
     def test_format_json_handles_empty_operations(self):
         """format_json() should handle empty operations list."""
-        result = ComparisonResult(distance=0, operations=[], score=1.0)
+        result = ComparisonResult(edit_count=0, operations=[], score=1.0)
 
         output = format_json(result)
         parsed = json.loads(output)
 
-        assert parsed["distance"] == 0
+        assert parsed["edit_count"] == 0
         assert parsed["operations"] == []
 
 
@@ -251,7 +251,7 @@ class TestDetailedOperationFormatting:
     def test_format_human_includes_node_type(self):
         """format_human() should include node type in detailed output."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(
                     type="rename",
@@ -271,7 +271,7 @@ class TestDetailedOperationFormatting:
     def test_format_human_includes_tree_path(self):
         """format_human() should include tree path in detailed output."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(
                     type="insert",
@@ -291,7 +291,7 @@ class TestDetailedOperationFormatting:
     def test_format_json_includes_node_type(self):
         """format_json() should include node_type field in operations."""
         result = ComparisonResult(
-            distance=1,
+            edit_count=1,
             operations=[
                 EditOperation(
                     type="delete",
@@ -314,7 +314,7 @@ class TestDetailedOperationFormatting:
     def test_format_json_includes_tree_path(self):
         """format_json() should include tree_path field in operations."""
         result = ComparisonResult(
-            distance=0,
+            edit_count=0,
             operations=[
                 EditOperation(
                     type="match",

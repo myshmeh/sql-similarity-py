@@ -4,13 +4,7 @@ from pathlib import Path
 from typing import Union
 
 from sql_similarity.domain.parser import parse_sql, ParseError
-from sql_similarity.domain.comparator import (
-    ComparisonResult,
-    compute_distance,
-    compute_score,
-    interpret_mapping,
-    tree_size,
-)
+from sql_similarity.domain.comparator import ComparisonResult, compare_trees
 
 
 class FileNotFoundError(Exception):
@@ -46,7 +40,7 @@ class ComparisonService:
             file2: Path to second SQL file.
 
         Returns:
-            ComparisonResult with distance and edit operations.
+            ComparisonResult with edit_count and edit operations.
 
         Raises:
             FileNotFoundError: If either file does not exist.
@@ -76,17 +70,5 @@ class ComparisonService:
         except ParseError as e:
             raise SQLParseError(path2.name, e)
 
-        # Compute tree sizes for score normalization
-        size1 = tree_size(tree1)
-        size2 = tree_size(tree2)
-
-        # Compute distance and mapping
-        distance, mapping = compute_distance(tree1, tree2)
-
-        # Interpret mapping to edit operations
-        operations = interpret_mapping(mapping)
-
-        # Compute normalized similarity score
-        score = compute_score(distance, size1, size2)
-
-        return ComparisonResult(distance=distance, operations=operations, score=score)
+        # Compare trees using sqlglot diff
+        return compare_trees(tree1, tree2)

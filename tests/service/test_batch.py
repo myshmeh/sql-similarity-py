@@ -9,7 +9,7 @@ from sql_similarity.service.batch import (
     FileError,
     scan_directory,
     compare_all_pairs,
-    filter_by_max_distance,
+    filter_by_max_edits,
     filter_by_top,
 )
 from sql_similarity.domain.comparator import EditOperation
@@ -36,7 +36,7 @@ class TestBatchComparisonResultDataclass:
         comparison = PairComparison(
             file1="a.sql",
             file2="b.sql",
-            distance=5,
+            edit_count=5,
             operations=[],
             score=0.5,
         )
@@ -47,7 +47,7 @@ class TestBatchComparisonResultDataclass:
             errors=[],
         )
         assert len(result.comparisons) == 1
-        assert result.comparisons[0].distance == 5
+        assert result.comparisons[0].edit_count == 5
 
     def test_batch_comparison_result_with_errors(self):
         """BatchComparisonResult should store errors list."""
@@ -70,13 +70,13 @@ class TestPairComparisonDataclass:
         comparison = PairComparison(
             file1="query1.sql",
             file2="query2.sql",
-            distance=3,
+            edit_count=3,
             operations=[],
             score=0.7,
         )
         assert comparison.file1 == "query1.sql"
         assert comparison.file2 == "query2.sql"
-        assert comparison.distance == 3
+        assert comparison.edit_count == 3
         assert comparison.operations == []
         assert comparison.score == 0.7
 
@@ -92,7 +92,7 @@ class TestPairComparisonDataclass:
         comparison = PairComparison(
             file1="a.sql",
             file2="b.sql",
-            distance=1,
+            edit_count=1,
             operations=[operation],
             score=0.9,
         )
@@ -200,8 +200,8 @@ class TestCompareAllPairs:
         assert ("b.sql", "c.sql") in pairs
 
     def test_compare_all_pairs_returns_sorted_results(self, tmp_path):
-        """compare_all_pairs() should sort results by distance ascending (T010)."""
-        # Create files with varying complexity to get different distances
+        """compare_all_pairs() should sort results by score descending (T010)."""
+        # Create files with varying complexity to get different edit counts
         (tmp_path / "simple1.sql").write_text("SELECT id FROM users")
         (tmp_path / "simple2.sql").write_text("SELECT id FROM users")  # identical
         (tmp_path / "complex.sql").write_text(
@@ -210,11 +210,11 @@ class TestCompareAllPairs:
 
         result = compare_all_pairs(tmp_path)
 
-        # Verify sorted by distance ascending
-        distances = [c.distance for c in result.comparisons]
-        assert distances == sorted(distances)
+        # Verify sorted by score descending (most similar first)
+        scores = [c.score for c in result.comparisons]
+        assert scores == sorted(scores, reverse=True)
         # First comparison should be the most similar (simple1 vs simple2)
-        assert result.comparisons[0].distance == 0
+        assert result.comparisons[0].edit_count == 0
 
     def test_compare_all_pairs_handles_empty_files(self, tmp_path):
         """compare_all_pairs() should handle empty SQL files gracefully.
@@ -273,40 +273,40 @@ class TestCompareAllPairs:
 # ============================================================================
 
 
-class TestFilterByMaxDistance:
-    """Tests for filter_by_max_distance() function (T022)."""
+class TestFilterByMaxEdits:
+    """Tests for filter_by_max_edits() function (T022)."""
 
-    def test_filter_by_max_distance_keeps_matching_pairs(self):
-        """filter_by_max_distance() should keep pairs within threshold."""
+    def test_filter_by_max_edits_keeps_matching_pairs(self):
+        """filter_by_max_edits() should keep pairs within threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
-            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", edit_count=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", edit_count=10, operations=[], score=0.0),
         ]
 
-        filtered = filter_by_max_distance(comparisons, max_distance=5)
+        filtered = filter_by_max_edits(comparisons, max_edits=5)
 
         assert len(filtered) == 2
-        assert all(c.distance <= 5 for c in filtered)
+        assert all(c.edit_count <= 5 for c in filtered)
 
-    def test_filter_by_max_distance_removes_exceeding_pairs(self):
-        """filter_by_max_distance() should remove pairs exceeding threshold."""
+    def test_filter_by_max_edits_removes_exceeding_pairs(self):
+        """filter_by_max_edits() should remove pairs exceeding threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=10, operations=[], score=0.0),
-            PairComparison(file1="a.sql", file2="c.sql", distance=20, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=10, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="c.sql", edit_count=20, operations=[], score=0.0),
         ]
 
-        filtered = filter_by_max_distance(comparisons, max_distance=5)
+        filtered = filter_by_max_edits(comparisons, max_edits=5)
 
         assert len(filtered) == 0
 
-    def test_filter_by_max_distance_includes_equal_threshold(self):
-        """filter_by_max_distance() should include pairs exactly at threshold."""
+    def test_filter_by_max_edits_includes_equal_threshold(self):
+        """filter_by_max_edits() should include pairs exactly at threshold."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=5, operations=[], score=0.5),
         ]
 
-        filtered = filter_by_max_distance(comparisons, max_distance=5)
+        filtered = filter_by_max_edits(comparisons, max_edits=5)
 
         assert len(filtered) == 1
 
@@ -317,21 +317,21 @@ class TestFilterByTop:
     def test_filter_by_top_returns_first_n_items(self):
         """filter_by_top() should return first N items."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
-            PairComparison(file1="b.sql", file2="c.sql", distance=10, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", edit_count=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", edit_count=10, operations=[], score=0.0),
         ]
 
         filtered = filter_by_top(comparisons, top=2)
 
         assert len(filtered) == 2
-        assert filtered[0].distance == 3
-        assert filtered[1].distance == 5
+        assert filtered[0].edit_count == 3
+        assert filtered[1].edit_count == 5
 
     def test_filter_by_top_returns_all_if_fewer_items(self):
         """filter_by_top() should return all items if fewer than N."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=3, operations=[], score=0.7),
         ]
 
         filtered = filter_by_top(comparisons, top=5)
@@ -342,23 +342,23 @@ class TestFilterByTop:
 class TestCombinedFilters:
     """Tests for combined filters (T024)."""
 
-    def test_combined_filters_max_distance_then_top(self):
-        """Combined filters should apply max-distance first, then top."""
+    def test_combined_filters_max_edits_then_top(self):
+        """Combined filters should apply max-edits first, then top."""
         comparisons = [
-            PairComparison(file1="a.sql", file2="b.sql", distance=3, operations=[], score=0.7),
-            PairComparison(file1="a.sql", file2="c.sql", distance=5, operations=[], score=0.5),
-            PairComparison(file1="b.sql", file2="c.sql", distance=7, operations=[], score=0.3),
-            PairComparison(file1="a.sql", file2="d.sql", distance=15, operations=[], score=0.0),
+            PairComparison(file1="a.sql", file2="b.sql", edit_count=3, operations=[], score=0.7),
+            PairComparison(file1="a.sql", file2="c.sql", edit_count=5, operations=[], score=0.5),
+            PairComparison(file1="b.sql", file2="c.sql", edit_count=7, operations=[], score=0.3),
+            PairComparison(file1="a.sql", file2="d.sql", edit_count=15, operations=[], score=0.0),
         ]
 
-        # First filter by max_distance 10 (keeps 3 items)
-        filtered = filter_by_max_distance(comparisons, max_distance=10)
+        # First filter by max_edits 10 (keeps 3 items)
+        filtered = filter_by_max_edits(comparisons, max_edits=10)
         # Then take top 2
         filtered = filter_by_top(filtered, top=2)
 
         assert len(filtered) == 2
-        assert filtered[0].distance == 3
-        assert filtered[1].distance == 5
+        assert filtered[0].edit_count == 3
+        assert filtered[1].edit_count == 5
 
 
 # ============================================================================

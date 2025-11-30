@@ -33,7 +33,7 @@ class TestPairController:
 
         assert exit_code == ExitCode.SUCCESS
         captured = capsys.readouterr()
-        assert "Tree Edit Distance: 0" in captured.out
+        assert "Edit Count: 0" in captured.out
 
     def test_execute_returns_success_for_different_files(
         self, controller, fixtures_dir, capsys
@@ -47,7 +47,7 @@ class TestPairController:
 
         assert exit_code == ExitCode.SUCCESS
         captured = capsys.readouterr()
-        assert "Tree Edit Distance:" in captured.out
+        assert "Edit Count:" in captured.out
 
     def test_execute_json_format(self, controller, fixtures_dir, capsys):
         """execute() should output JSON when json=True."""
@@ -58,7 +58,7 @@ class TestPairController:
 
         assert exit_code == ExitCode.SUCCESS
         captured = capsys.readouterr()
-        assert '"distance":' in captured.out
+        assert '"edit_count":' in captured.out
         assert '"operations":' in captured.out
 
     def test_execute_returns_invalid_args_for_missing_path2(

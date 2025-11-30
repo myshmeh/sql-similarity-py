@@ -21,7 +21,7 @@ class TestFormatBatchTable:
             directory="/path/to/dir",
             files=["a.sql", "b.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.847)
+                PairComparison(file1="a.sql", file2="b.sql", edit_count=5, operations=[], score=0.847)
             ],
             errors=[],
         )
@@ -37,7 +37,7 @@ class TestFormatBatchTable:
             directory="/path/to/dir",
             files=["a.sql", "b.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=0, operations=[], score=1.0)
+                PairComparison(file1="a.sql", file2="b.sql", edit_count=0, operations=[], score=1.0)
             ],
             errors=[],
         )
@@ -71,7 +71,7 @@ class TestFormatBatchJson:
         comparison = PairComparison(
             file1="a.sql",
             file2="b.sql",
-            distance=1,
+            edit_count=1,
             operations=operations,
             score=0.9,
         )
@@ -102,7 +102,7 @@ class TestFormatBatchJson:
         comparison = PairComparison(
             file1="a.sql",
             file2="b.sql",
-            distance=2,
+            edit_count=2,
             operations=[],
             score=0.847,
         )
@@ -129,11 +129,11 @@ class TestFormatBatchJson:
         )
 
         json_output = format_batch_json(
-            result, max_distance=10, top=5, total_comparisons=20
+            result, max_edits=10, top=5, total_comparisons=20
         )
         parsed = json.loads(json_output)
 
-        assert parsed["max_distance_filter"] == 10
+        assert parsed["max_edits_filter"] == 10
         assert parsed["top_filter"] == 5
         assert parsed["total_comparisons"] == 20
         assert parsed["shown_comparisons"] == 0
@@ -144,7 +144,7 @@ class TestFormatBatchJson:
             directory="/path/to/dir",
             files=["a.sql", "b.sql", "c.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5)
+                PairComparison(file1="a.sql", file2="b.sql", edit_count=5, operations=[], score=0.5)
             ],
             errors=[FileError(file="invalid.sql", error="Parse error")],
         )
@@ -168,7 +168,7 @@ class TestFormatBatchCsv:
             directory="/path/to/dir",
             files=["a.sql", "b.sql"],
             comparisons=[
-                PairComparison(file1="a.sql", file2="b.sql", distance=5, operations=[], score=0.5)
+                PairComparison(file1="a.sql", file2="b.sql", edit_count=5, operations=[], score=0.5)
             ],
             errors=[],
         )
@@ -176,7 +176,7 @@ class TestFormatBatchCsv:
         csv_output = format_batch_csv(result)
         lines = csv_output.strip().split("\n")
 
-        assert lines[0] == "file1,file2,score,distance"
+        assert lines[0] == "file1,file2,score,edit_count"
         assert lines[1] == "a.sql,b.sql,0.5,5"
 
     def test_format_batch_csv_handles_filenames_with_commas(self):
@@ -188,7 +188,7 @@ class TestFormatBatchCsv:
                 PairComparison(
                     file1="query,with,commas.sql",
                     file2="normal.sql",
-                    distance=3,
+                    edit_count=3,
                     operations=[],
                     score=0.7,
                 )
@@ -218,4 +218,4 @@ class TestFormatBatchCsv:
 
         # Should only have header
         assert len(lines) == 1
-        assert lines[0] == "file1,file2,score,distance"
+        assert lines[0] == "file1,file2,score,edit_count"

@@ -29,7 +29,7 @@ class TestBatchController:
         """execute() should return BATCH_SUCCESS for valid directory."""
         args = argparse.Namespace(
             path1=str(fixtures_dir),
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=False,
             csv=False,
@@ -47,7 +47,7 @@ class TestBatchController:
         """execute() should return BATCH_DIR_NOT_FOUND for nonexistent dir."""
         args = argparse.Namespace(
             path1="/nonexistent/directory",
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=False,
             csv=False,
@@ -68,7 +68,7 @@ class TestBatchController:
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=False,
             csv=False,
@@ -92,7 +92,7 @@ class TestBatchController:
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=False,
             csv=False,
@@ -104,15 +104,15 @@ class TestBatchController:
         captured = capsys.readouterr()
         assert "Errors:" in captured.out
 
-    def test_execute_returns_invalid_args_for_negative_max_distance(
+    def test_execute_returns_invalid_args_for_negative_max_edits(
         self, controller, tmp_path, capsys
     ):
-        """execute() should return BATCH_INVALID_ARGS for negative max_distance."""
+        """execute() should return BATCH_INVALID_ARGS for negative max_edits."""
         (tmp_path / "a.sql").write_text("SELECT 1")
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=-1,
+            max_edits=-1,
             top=None,
             json=False,
             csv=False,
@@ -132,7 +132,7 @@ class TestBatchController:
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=None,
+            max_edits=None,
             top=0,
             json=False,
             csv=False,
@@ -148,7 +148,7 @@ class TestBatchController:
         """execute() should output JSON when json=True."""
         args = argparse.Namespace(
             path1=str(fixtures_dir),
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=True,
             csv=False,
@@ -166,7 +166,7 @@ class TestBatchController:
         """execute() should output CSV when csv=True."""
         args = argparse.Namespace(
             path1=str(fixtures_dir),
-            max_distance=None,
+            max_edits=None,
             top=None,
             json=False,
             csv=True,
@@ -177,10 +177,10 @@ class TestBatchController:
         assert exit_code == ExitCode.BATCH_SUCCESS
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
-        assert lines[0] == "file1,file2,score,distance"
+        assert lines[0] == "file1,file2,score,edit_count"
 
-    def test_execute_applies_max_distance_filter(self, controller, tmp_path, capsys):
-        """execute() should filter results by max_distance."""
+    def test_execute_applies_max_edits_filter(self, controller, tmp_path, capsys):
+        """execute() should filter results by max_edits."""
         (tmp_path / "a.sql").write_text("SELECT id FROM users")
         (tmp_path / "b.sql").write_text("SELECT id FROM users")
         (tmp_path / "c.sql").write_text(
@@ -189,7 +189,7 @@ class TestBatchController:
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=0,
+            max_edits=0,
             top=None,
             json=False,
             csv=False,
@@ -199,7 +199,7 @@ class TestBatchController:
 
         assert exit_code == ExitCode.BATCH_SUCCESS
         captured = capsys.readouterr()
-        assert "max distance: 0" in captured.out
+        assert "max edits: 0" in captured.out
 
     def test_execute_applies_top_filter(self, controller, tmp_path, capsys):
         """execute() should filter results by top."""
@@ -209,7 +209,7 @@ class TestBatchController:
 
         args = argparse.Namespace(
             path1=str(tmp_path),
-            max_distance=None,
+            max_edits=None,
             top=1,
             json=False,
             csv=False,

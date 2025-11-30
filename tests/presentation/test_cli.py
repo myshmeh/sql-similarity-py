@@ -26,24 +26,24 @@ class TestCliIntegration:
         return result
 
     def test_cli_compares_identical_files(self, fixtures_dir):
-        """CLI should report distance 0 for identical files."""
+        """CLI should report edit_count 0 for identical files."""
         file1 = str(fixtures_dir / "simple_select.sql")
         file2 = str(fixtures_dir / "simple_select.sql")
 
         result = self.run_cli(file1, file2)
 
         assert result.returncode == 0
-        assert "Tree Edit Distance: 0" in result.stdout
+        assert "Edit Count: 0" in result.stdout
 
     def test_cli_compares_different_files(self, fixtures_dir):
-        """CLI should report positive distance for different files."""
+        """CLI should report positive edit_count for different files."""
         file1 = str(fixtures_dir / "simple_select.sql")
         file2 = str(fixtures_dir / "complex_join.sql")
 
         result = self.run_cli(file1, file2)
 
         assert result.returncode == 0
-        assert "Tree Edit Distance:" in result.stdout
+        assert "Edit Count:" in result.stdout
         assert "Operations:" in result.stdout
 
     def test_cli_json_output(self, fixtures_dir):
@@ -55,9 +55,9 @@ class TestCliIntegration:
 
         assert result.returncode == 0
         parsed = json.loads(result.stdout)
-        assert "distance" in parsed
+        assert "edit_count" in parsed
         assert "operations" in parsed
-        assert parsed["distance"] == 0
+        assert parsed["edit_count"] == 0
 
     def test_cli_json_short_flag(self, fixtures_dir):
         """CLI should accept -j as short form of --json."""
@@ -68,7 +68,7 @@ class TestCliIntegration:
 
         assert result.returncode == 0
         parsed = json.loads(result.stdout)
-        assert "distance" in parsed
+        assert "edit_count" in parsed
 
     def test_cli_shows_operations_in_output(self, fixtures_dir):
         """CLI should show operations in human-readable output."""
@@ -208,7 +208,7 @@ class TestCliBatchMode:
         # Should have table header elements
         assert "File 1" in result.stdout
         assert "File 2" in result.stdout
-        assert "Distance" in result.stdout
+        assert "Edits" in result.stdout
         # Should show file count info
         assert "Files:" in result.stdout
         assert "Comparisons:" in result.stdout
@@ -246,7 +246,7 @@ class TestCliBatchMode:
         assert "empty.sql" in result.stdout
 
     def test_cli_batch_shows_sorted_results(self, tmp_path):
-        """CLI batch mode should show results sorted by distance ascending."""
+        """CLI batch mode should show results sorted by score descending."""
         # Create files with different similarities
         (tmp_path / "a.sql").write_text("SELECT id FROM users")
         (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical to a
@@ -257,12 +257,12 @@ class TestCliBatchMode:
         result = self.run_cli(str(tmp_path))
 
         assert result.returncode == 0
-        # Find lines with distances and verify order
+        # Find lines with edits and verify order
         lines = result.stdout.split("\n")
-        distance_lines = [l for l in lines if l.strip() and ".sql" in l]
-        # First comparison should be a.sql vs b.sql with distance 0
-        if distance_lines:
-            first_line = distance_lines[0]
+        edit_lines = [l for l in lines if l.strip() and ".sql" in l]
+        # First comparison should be a.sql vs b.sql with edit_count 0
+        if edit_lines:
+            first_line = edit_lines[0]
             assert "0" in first_line or "a.sql" in first_line
 
 
@@ -284,23 +284,23 @@ class TestCliFilterOptions:
         )
         return result
 
-    def test_cli_max_distance_flag(self, tmp_path):
-        """CLI should filter results by --max-distance (T025)."""
-        # Create files with varying distances
+    def test_cli_max_edits_flag(self, tmp_path):
+        """CLI should filter results by --max-edits (T025)."""
+        # Create files with varying edit counts
         (tmp_path / "a.sql").write_text("SELECT id FROM users")
         (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical
         (tmp_path / "c.sql").write_text(
             "SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id"
         )
 
-        result = self.run_cli(str(tmp_path), "--max-distance", "5")
+        result = self.run_cli(str(tmp_path), "--max-edits", "5")
 
         assert result.returncode == 0
-        # Should only show pairs with distance <= 5
+        # Should only show pairs with edit_count <= 5
         assert "a.sql" in result.stdout
         assert "b.sql" in result.stdout
         # Header should indicate filter
-        assert "max distance: 5" in result.stdout
+        assert "max edits: 5" in result.stdout
 
     def test_cli_top_flag(self, tmp_path):
         """CLI should filter results by --top (T026)."""
@@ -315,8 +315,8 @@ class TestCliFilterOptions:
         # Should show "Showing: 2 of X" in header
         assert "top 2" in result.stdout
 
-    def test_cli_combined_max_distance_and_top(self, tmp_path):
-        """CLI should combine --max-distance and --top filters (T027)."""
+    def test_cli_combined_max_edits_and_top(self, tmp_path):
+        """CLI should combine --max-edits and --top filters (T027)."""
         (tmp_path / "a.sql").write_text("SELECT id FROM users")
         (tmp_path / "b.sql").write_text("SELECT id FROM users")  # identical
         (tmp_path / "c.sql").write_text("SELECT name FROM customers")
@@ -324,17 +324,17 @@ class TestCliFilterOptions:
             "SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id"
         )
 
-        result = self.run_cli(str(tmp_path), "--max-distance", "20", "--top", "2")
+        result = self.run_cli(str(tmp_path), "--max-edits", "20", "--top", "2")
 
         assert result.returncode == 0
-        assert "max distance: 20" in result.stdout
+        assert "max edits: 20" in result.stdout
         assert "top 2" in result.stdout
 
-    def test_cli_exit_code_4_for_invalid_max_distance(self, tmp_path):
-        """CLI should return exit code 4 for negative --max-distance (T028)."""
+    def test_cli_exit_code_4_for_invalid_max_edits(self, tmp_path):
+        """CLI should return exit code 4 for negative --max-edits (T028)."""
         (tmp_path / "a.sql").write_text("SELECT 1")
 
-        result = self.run_cli(str(tmp_path), "--max-distance", "-1")
+        result = self.run_cli(str(tmp_path), "--max-edits", "-1")
 
         assert result.returncode == 4
         assert "must be" in result.stderr.lower() or "invalid" in result.stderr.lower()
@@ -353,10 +353,10 @@ class TestCliFilterOptions:
         (tmp_path / "a.sql").write_text("SELECT 1")
         (tmp_path / "b.sql").write_text("SELECT 2")
 
-        result = self.run_cli(str(tmp_path), "--max-distance", "10")
+        result = self.run_cli(str(tmp_path), "--max-edits", "10")
 
         assert result.returncode == 0
-        assert "(max distance: 10)" in result.stdout
+        assert "(max edits: 10)" in result.stdout
 
     def test_table_header_shows_filtered_count(self, tmp_path):
         """CLI table header should show 'Showing: X of Y' when filtered (T031)."""
@@ -410,7 +410,7 @@ class TestCliBatchOutputFormats:
 
         assert result.returncode == 0
         lines = result.stdout.strip().split("\n")
-        assert lines[0] == "file1,file2,score,distance"
+        assert lines[0] == "file1,file2,score,edit_count"
         assert len(lines) == 2  # header + 1 comparison
 
     def test_json_and_csv_are_mutually_exclusive(self, tmp_path):

@@ -49,10 +49,10 @@ def create_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "-m",
-        "--max-distance",
+        "--max-edits",
         type=int,
         default=None,
-        help="Only show pairs with distance <= value (batch mode)",
+        help="Only show pairs with edit count <= value (batch mode)",
     )
     parser.add_argument(
         "-t",

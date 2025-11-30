@@ -14,7 +14,7 @@ from sql_similarity.presentation.batch_formatter import (
 from sql_similarity.service.batch import (
     BatchComparisonResult,
     compare_all_pairs,
-    filter_by_max_distance,
+    filter_by_max_edits,
     filter_by_top,
 )
 
@@ -24,7 +24,7 @@ class BatchController(BaseController):
 
     Handles:
     - Directory scanning and pairwise comparison
-    - Filtering by max_distance and top
+    - Filtering by max_edits and top
     - Table, JSON, and CSV output formats
     - Partial success with errors
     """
@@ -33,19 +33,19 @@ class BatchController(BaseController):
         """Execute batch comparison and return exit code.
 
         Args:
-            args: Parsed arguments with path1, max_distance, top, json, csv attributes.
+            args: Parsed arguments with path1, max_edits, top, json, csv attributes.
 
         Returns:
             ExitCode value indicating success or specific error.
         """
         directory = args.path1
-        max_distance = args.max_distance
+        max_edits = args.max_edits
         top = args.top
 
         # Validate filter arguments
-        if max_distance is not None and max_distance < 0:
+        if max_edits is not None and max_edits < 0:
             print(
-                "Error: --max-distance must be a non-negative integer", file=sys.stderr
+                "Error: --max-edits must be a non-negative integer", file=sys.stderr
             )
             return ExitCode.BATCH_INVALID_ARGS
 
@@ -66,11 +66,11 @@ class BatchController(BaseController):
             print(f"Error: No .sql files found in {directory}", file=sys.stderr)
             return ExitCode.BATCH_NO_FILES
 
-        # Apply filters (max-distance first, then top)
+        # Apply filters (max-edits first, then top)
         filtered_comparisons = result.comparisons
-        if max_distance is not None:
-            filtered_comparisons = filter_by_max_distance(
-                filtered_comparisons, max_distance
+        if max_edits is not None:
+            filtered_comparisons = filter_by_max_edits(
+                filtered_comparisons, max_edits
             )
         if top is not None:
             filtered_comparisons = filter_by_top(filtered_comparisons, top)
@@ -91,7 +91,7 @@ class BatchController(BaseController):
             print(
                 format_batch_json(
                     filtered_result,
-                    max_distance=max_distance,
+                    max_edits=max_edits,
                     top=top,
                     total_comparisons=total_before_filter,
                 )
@@ -100,7 +100,7 @@ class BatchController(BaseController):
             print(format_batch_csv(filtered_result))
         else:
             print(
-                format_batch_table(filtered_result, max_distance=max_distance, top=top)
+                format_batch_table(filtered_result, max_edits=max_edits, top=top)
             )
 
         # Determine exit code

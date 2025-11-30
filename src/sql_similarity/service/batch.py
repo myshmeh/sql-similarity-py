@@ -5,13 +5,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Union
 
-from sql_similarity.domain.comparator import (
-    EditOperation,
-    compute_distance,
-    compute_score,
-    interpret_mapping,
-    tree_size,
-)
+from sql_similarity.domain.comparator import EditOperation, compare_trees
 from sql_similarity.domain.parser import parse_sql, ParseError
 
 
@@ -35,14 +29,14 @@ class PairComparison:
     Attributes:
         file1: Path to first file (relative to directory).
         file2: Path to second file (relative to directory).
-        distance: Tree edit distance between the files.
+        edit_count: Number of edit operations (excluding matches).
         operations: List of edit operations (aligns with original command output).
         score: Normalized similarity score (0.0-1.0).
     """
 
     file1: str
     file2: str
-    distance: int
+    edit_count: int
     operations: list[EditOperation]
     score: float
 
@@ -94,7 +88,7 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
         directory: Path to directory containing SQL files.
 
     Returns:
-        BatchComparisonResult with all pairwise comparisons sorted by distance.
+        BatchComparisonResult with all pairwise comparisons sorted by score.
         Files are identified by their relative paths (e.g., "subdir/file.sql").
     """
     dir_path = Path(directory)
@@ -121,26 +115,21 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
         tree1 = parsed_trees[file1]
         tree2 = parsed_trees[file2]
 
-        # Compute tree sizes for score normalization
-        size1 = tree_size(tree1)
-        size2 = tree_size(tree2)
-
-        distance, mapping = compute_distance(tree1, tree2)
-        operations = interpret_mapping(mapping)
-        score = compute_score(distance, size1, size2)
+        # Compare trees using sqlglot diff
+        result = compare_trees(tree1, tree2)
 
         comparisons.append(
             PairComparison(
                 file1=file1,
                 file2=file2,
-                distance=distance,
-                operations=operations,
-                score=score,
+                edit_count=result.edit_count,
+                operations=result.operations,
+                score=result.score,
             )
         )
 
-    # Sort by score descending (most similar first), then distance ascending for ties
-    comparisons.sort(key=lambda c: (-c.score, c.distance))
+    # Sort by score descending (most similar first), then edit_count ascending for ties
+    comparisons.sort(key=lambda c: (-c.score, c.edit_count))
 
     return BatchComparisonResult(
         directory=str(directory),
@@ -150,19 +139,19 @@ def compare_all_pairs(directory: Union[str, Path]) -> BatchComparisonResult:
     )
 
 
-def filter_by_max_distance(
-    comparisons: list[PairComparison], max_distance: int
+def filter_by_max_edits(
+    comparisons: list[PairComparison], max_edits: int
 ) -> list[PairComparison]:
-    """Filter comparisons to only include those within a distance threshold.
+    """Filter comparisons to only include those within an edit count threshold.
 
     Args:
         comparisons: List of PairComparison objects.
-        max_distance: Maximum distance to include (inclusive).
+        max_edits: Maximum edit count to include (inclusive).
 
     Returns:
-        Filtered list of comparisons with distance <= max_distance.
+        Filtered list of comparisons with edit_count <= max_edits.
     """
-    return [c for c in comparisons if c.distance <= max_distance]
+    return [c for c in comparisons if c.edit_count <= max_edits]
 
 
 def filter_by_top(

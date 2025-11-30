@@ -29,14 +29,14 @@ class TestComparisonServiceCompare:
 
         assert isinstance(result, ComparisonResult)
 
-    def test_compare_identical_files_returns_zero_distance(self, service, fixtures_dir):
-        """compare() should return distance 0 for identical files."""
+    def test_compare_identical_files_returns_zero_edit_count(self, service, fixtures_dir):
+        """compare() should return edit_count 0 for identical files."""
         file1 = fixtures_dir / "simple_select.sql"
         file2 = fixtures_dir / "simple_select.sql"
 
         result = service.compare(file1, file2)
 
-        assert result.distance == 0
+        assert result.edit_count == 0
 
     def test_compare_identical_files_has_only_match_operations(self, service, fixtures_dir):
         """compare() should return only MATCH operations for identical files."""
@@ -47,14 +47,14 @@ class TestComparisonServiceCompare:
 
         assert all(op.type == "match" for op in result.operations)
 
-    def test_compare_different_files_returns_positive_distance(self, service, fixtures_dir):
-        """compare() should return positive distance for different files."""
+    def test_compare_different_files_returns_positive_edit_count(self, service, fixtures_dir):
+        """compare() should return positive edit_count for different files."""
         file1 = fixtures_dir / "simple_select.sql"
         file2 = fixtures_dir / "complex_join.sql"
 
         result = service.compare(file1, file2)
 
-        assert result.distance > 0
+        assert result.edit_count > 0
 
     def test_compare_different_files_has_edit_operations(self, service, fixtures_dir):
         """compare() should return edit operations for different files."""
@@ -74,7 +74,8 @@ class TestComparisonServiceCompare:
 
         result = service.compare(file1, file2)
 
-        valid_types = {"match", "rename", "insert", "delete"}
+        # Now includes 'move' for sqlglot diff
+        valid_types = {"match", "rename", "insert", "delete", "move"}
         for op in result.operations:
             assert op.type in valid_types
 

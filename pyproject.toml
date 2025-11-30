@@ -5,8 +5,7 @@ description = "CLI tool to compare SQL files using tree edit distance"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "sqlparse>=0.5.0",
-    "apted>=1.0.3",
+    "sqlglot>=26.0.0",
 ]
 
 [project.optional-dependencies]

@@ -71,21 +71,21 @@ class TestCreateParser:
         with pytest.raises(SystemExit):
             parser.parse_args(["./dir/", "--json", "--csv"])
 
-    def test_parser_has_max_distance_option(self):
-        """Parser should have -m/--max-distance option."""
+    def test_parser_has_max_edits_option(self):
+        """Parser should have -m/--max-edits option."""
         parser = create_parser()
 
         # Default is None
         args = parser.parse_args(["./dir/"])
-        assert args.max_distance is None
+        assert args.max_edits is None
 
-        # With --max-distance
-        args = parser.parse_args(["./dir/", "--max-distance", "5"])
-        assert args.max_distance == 5
+        # With --max-edits
+        args = parser.parse_args(["./dir/", "--max-edits", "5"])
+        assert args.max_edits == 5
 
         # With -m
         args = parser.parse_args(["./dir/", "-m", "10"])
-        assert args.max_distance == 10
+        assert args.max_edits == 10
 
     def test_parser_has_top_option(self):
         """Parser should have -t/--top option."""
@@ -103,12 +103,12 @@ class TestCreateParser:
         args = parser.parse_args(["./dir/", "-t", "5"])
         assert args.top == 5
 
-    def test_parser_max_distance_requires_integer(self):
-        """Parser should reject non-integer max-distance."""
+    def test_parser_max_edits_requires_integer(self):
+        """Parser should reject non-integer max-edits."""
         parser = create_parser()
 
         with pytest.raises(SystemExit):
-            parser.parse_args(["./dir/", "--max-distance", "abc"])
+            parser.parse_args(["./dir/", "--max-edits", "abc"])
 
     def test_parser_top_requires_integer(self):
         """Parser should reject non-integer top."""

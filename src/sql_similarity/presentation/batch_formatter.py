@@ -9,14 +9,14 @@ from sql_similarity.service.batch import BatchComparisonResult
 
 def format_batch_table(
     result: BatchComparisonResult,
-    max_distance: int | None = None,
+    max_edits: int | None = None,
     top: int | None = None,
 ) -> str:
     """Format batch comparison result as a human-readable table.
 
     Args:
         result: BatchComparisonResult with comparisons and errors.
-        max_distance: Optional filter applied (for display in header).
+        max_edits: Optional filter applied (for display in header).
         top: Optional top-k filter applied (for display in header).
 
     Returns:
@@ -27,8 +27,8 @@ def format_batch_table(
     # Build header with filter info
     header_parts = [f"Batch Comparison: {result.directory}"]
     filter_info = []
-    if max_distance is not None:
-        filter_info.append(f"max distance: {max_distance}")
+    if max_edits is not None:
+        filter_info.append(f"max edits: {max_edits}")
     if top is not None:
         filter_info.append(f"top {top}")
     if filter_info:
@@ -44,7 +44,7 @@ def format_batch_table(
     valid_files = total_files - total_errors
     total_possible = (valid_files * (valid_files - 1)) // 2 if valid_files > 1 else 0
 
-    if max_distance is not None or top is not None:
+    if max_edits is not None or top is not None:
         lines.append(
             f"Files: {total_files} | Showing: {total_comparisons} of {total_possible} comparisons | Errors: {total_errors}"
         )
@@ -60,14 +60,14 @@ def format_batch_table(
     col2_width = 20
     col3_width = 8
     col4_width = 10
-    lines.append(f"{'File 1':<{col1_width}}{'File 2':<{col2_width}}{'Score':>{col3_width}}{'Distance':>{col4_width}}")
+    lines.append(f"{'File 1':<{col1_width}}{'File 2':<{col2_width}}{'Score':>{col3_width}}{'Edits':>{col4_width}}")
     lines.append("─" * (col1_width + col2_width + col3_width + col4_width))
 
     # Table rows (already sorted by score descending)
     for comparison in result.comparisons:
         file1 = comparison.file1[:col1_width - 1] if len(comparison.file1) >= col1_width else comparison.file1
         file2 = comparison.file2[:col2_width - 1] if len(comparison.file2) >= col2_width else comparison.file2
-        lines.append(f"{file1:<{col1_width}}{file2:<{col2_width}}{comparison.score:>{col3_width}.3f}{comparison.distance:>{col4_width}}")
+        lines.append(f"{file1:<{col1_width}}{file2:<{col2_width}}{comparison.score:>{col3_width}.3f}{comparison.edit_count:>{col4_width}}")
 
     # Errors section
     if result.errors:
@@ -81,7 +81,7 @@ def format_batch_table(
 
 def format_batch_json(
     result: BatchComparisonResult,
-    max_distance: int | None = None,
+    max_edits: int | None = None,
     top: int | None = None,
     total_comparisons: int | None = None,
 ) -> str:
@@ -89,7 +89,7 @@ def format_batch_json(
 
     Args:
         result: BatchComparisonResult with comparisons and errors.
-        max_distance: Optional filter applied (for metadata).
+        max_edits: Optional filter applied (for metadata).
         top: Optional top-k filter applied (for metadata).
         total_comparisons: Total comparisons before filtering (for metadata).
 
@@ -105,7 +105,7 @@ def format_batch_json(
                 "file1": c.file1,
                 "file2": c.file2,
                 "score": c.score,
-                "distance": c.distance,
+                "edit_count": c.edit_count,
                 "operations": [
                     {
                         "type": op.type,
@@ -126,8 +126,8 @@ def format_batch_json(
     }
 
     # Add filter metadata if filters were applied
-    if max_distance is not None or top is not None:
-        data["max_distance_filter"] = max_distance
+    if max_edits is not None or top is not None:
+        data["max_edits_filter"] = max_edits
         data["top_filter"] = top
         data["shown_comparisons"] = len(result.comparisons)
 
@@ -147,10 +147,10 @@ def format_batch_csv(result: BatchComparisonResult) -> str:
     writer = csv.writer(output, lineterminator="\n")
 
     # Write header
-    writer.writerow(["file1", "file2", "score", "distance"])
+    writer.writerow(["file1", "file2", "score", "edit_count"])
 
     # Write comparison rows
     for c in result.comparisons:
-        writer.writerow([c.file1, c.file2, c.score, c.distance])
+        writer.writerow([c.file1, c.file2, c.score, c.edit_count])
 
     return output.getvalue().strip()

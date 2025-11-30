@@ -2,9 +2,49 @@
 
 import csv
 import json
+import shutil
 from io import StringIO
 
 from sql_similarity.service.batch import BatchComparisonResult
+
+
+def _get_file_column_widths(result: "BatchComparisonResult") -> tuple[int, int]:
+    """Calculate column widths for file names based on terminal size and content.
+
+    Returns widths that adapt to terminal size while respecting content needs.
+    """
+    # Fixed columns: Score (8) + Distance (10) + some padding (4)
+    fixed_width = 8 + 10 + 4
+
+    # Get terminal width, default to 80 if unavailable
+    try:
+        terminal_width = shutil.get_terminal_size().columns
+    except Exception:
+        terminal_width = 80
+
+    # Available space for file columns
+    available = terminal_width - fixed_width
+
+    # Minimum width for each file column
+    min_width = 15
+
+    # Calculate max filename lengths from actual data
+    max_file1_len = max((len(c.file1) for c in result.comparisons), default=10) + 1
+    max_file2_len = max((len(c.file2) for c in result.comparisons), default=10) + 1
+
+    # Split available space proportionally, but cap at actual content needs
+    half_available = available // 2
+
+    col1_width = min(max(min_width, max_file1_len), half_available)
+    col2_width = min(max(min_width, max_file2_len), half_available)
+
+    # If one column needs less, give extra to the other
+    if col1_width < half_available and col2_width == half_available:
+        col2_width = min(max_file2_len, available - col1_width)
+    elif col2_width < half_available and col1_width == half_available:
+        col1_width = min(max_file1_len, available - col2_width)
+
+    return col1_width, col2_width
 
 
 def format_batch_table(
@@ -55,9 +95,8 @@ def format_batch_table(
 
     lines.append("")
 
-    # Table header
-    col1_width = 20
-    col2_width = 20
+    # Table header with dynamic column widths
+    col1_width, col2_width = _get_file_column_widths(result)
     col3_width = 8
     col4_width = 10
     lines.append(f"{'File 1':<{col1_width}}{'File 2':<{col2_width}}{'Score':>{col3_width}}{'Distance':>{col4_width}}")
